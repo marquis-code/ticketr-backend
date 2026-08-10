@@ -13,7 +13,7 @@ async function runE2ETest() {
     // 2. Register Super Admin
     const superAdminRes = await axios.post(`${API_BASE}/auth/register`, {
       name: 'Super Admin',
-      email: 'superadmin@cmultickets.com',
+      email: 'superadmin@ticketr.org',
       password: 'Password123!',
       role: 'SUPER_ADMIN',
     });

@@ -37,7 +37,7 @@ import { AppService } from './app.service';
             console.log(`🍃 Embedded MongoDB Memory Server started at ${uri}`);
           } catch (e) {
             console.warn(`MongoMemoryServer notice: ${e.message}, defaulting to Mongo URI.`);
-            uri = uri || 'mongodb://localhost:27017/cmultickets_db';
+            uri = uri || 'mongodb://localhost:27017/ticketr_db';
           }
         }
         return { uri };

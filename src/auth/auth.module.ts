@@ -20,7 +20,7 @@ import { Tenant, TenantSchema } from '../schemas/tenant.schema';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'super_secret_jwt_key_cmultickets_2026_change_in_prod',
+        secret: configService.get<string>('JWT_SECRET') || 'super_secret_jwt_key_ticketr_2026_change_in_prod',
         signOptions: { expiresIn: '7d' },
       }),
     }),

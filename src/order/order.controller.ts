@@ -22,7 +22,7 @@ export class OrderController {
       customerEmail: body.customerEmail,
       customerPhone: body.customerPhone,
       departmentCode: body.departmentCode,
-      items: body.items,
+      items: body.items, // Ensure items includes attendees
       callbackUrl: body.callbackUrl,
     });
   }

@@ -41,7 +41,7 @@ export class EventService {
   ) {
     let bannerUrl: string | undefined;
     if (bannerFile) {
-      bannerUrl = await this.cloudinaryService.uploadImage(bannerFile, 'cmultickets/events');
+      bannerUrl = await this.cloudinaryService.uploadImage(bannerFile, 'ticketr/events');
     }
 
     const cleanSlug = dto.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');

@@ -12,7 +12,7 @@ export class ResendService {
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
     this.resend = new Resend(apiKey || 're_mock');
-    this.fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'CMultiTickets <tickets@cmultickets.com>';
+    this.fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'Ticketr <tickets@ticketr.org>';
   }
 
   async generateQRCodeDataUri(hash: string): Promise<string> {
@@ -28,6 +28,7 @@ export class ResendService {
     ticketNumber: string;
     tierName: string;
     qrCodeHash: string;
+    ticketImageUrl?: string;
   }) {
     try {
       const qrDataUri = await this.generateQRCodeDataUri(payload.qrCodeHash);
@@ -54,7 +55,7 @@ export class ResendService {
           <div class="card">
             <div class="header">
               <h1>🎉 Your Event Ticket</h1>
-              <p style="margin-top: 6px; opacity: 0.9;">CMultiTickets Ticket Confirmation</p>
+              <p style="margin-top: 6px; opacity: 0.9;">Ticketr Ticket Confirmation</p>
             </div>
             <div class="body">
               <p>Hi <strong>${payload.customerName}</strong>,</p>
@@ -76,12 +77,15 @@ export class ResendService {
               </div>
 
               <div class="qr-container">
+                ${payload.ticketImageUrl 
+                  ? `<img src="${payload.ticketImageUrl}" alt="Custom Ticket" style="width:100%; max-width:400px; height:auto; margin-bottom:10px; border-radius:8px;" />` 
+                  : ''}
                 <img src="${qrDataUri}" alt="Ticket QR Code" />
                 <p style="font-size: 11px; color: #64748b; margin-top: 8px;">Present this QR Code at gate entry</p>
               </div>
             </div>
             <div class="footer">
-              Powered by CMultiTickets Platform
+              Powered by Ticketr Platform
             </div>
           </div>
         </body>

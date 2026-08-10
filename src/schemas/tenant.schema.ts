@@ -15,7 +15,7 @@ export class Tenant {
   name: string;
 
   @Prop({ required: true, unique: true, lowercase: true, trim: true, index: true })
-  slug: string; // e.g. "nursing" -> nursing.cmultickets.com
+  slug: string; // e.g. "nursing" -> nursing.ticketr.org
 
   @Prop({ trim: true, lowercase: true })
   customDomain?: string; // e.g. "tickets.nursingschool.edu"

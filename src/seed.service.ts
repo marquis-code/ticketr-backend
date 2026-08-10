@@ -19,7 +19,26 @@ export class SeedService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    await this.seedSuperAdmin();
     await this.seedULSESAClient();
+  }
+
+  async seedSuperAdmin() {
+    try {
+      let superAdmin = await this.userModel.findOne({ email: 'superadmin@ticketr.org' });
+      if (!superAdmin) {
+        const hashedPassword = await bcrypt.hash('SuperAdmin123!', 10);
+        superAdmin = await this.userModel.create({
+          name: 'Ticketr Super Admin',
+          email: 'superadmin@ticketr.org',
+          passwordHash: hashedPassword,
+          role: UserRole.SUPER_ADMIN,
+        });
+        this.logger.log('🔑 Seeded Super Admin: superadmin@ticketr.org');
+      }
+    } catch (error) {
+      this.logger.error('Error seeding Super Admin:', error);
+    }
   }
 
   async seedULSESAClient() {
@@ -30,11 +49,11 @@ export class SeedService implements OnModuleInit {
         tenant = await this.tenantModel.create({
           name: 'Education (ULSESA)',
           slug: 'ulsesa',
-          customDomain: 'ulsesa.cmultickets.com',
+          customDomain: 'ulsesa.ticketr.org',
           primaryColor: '#D4AF37', // Gold / Amber Accent
           secondaryColor: '#0F172A',
           logoUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87',
-          contactEmail: 'admin@ulsesa.cmultickets.com',
+          contactEmail: 'admin@ulsesa.ticketr.org',
           contactPhone: '+2348012345678',
           status: TenantStatus.ACTIVE,
         });
@@ -42,17 +61,17 @@ export class SeedService implements OnModuleInit {
       }
 
       // 2. Seed Organizer User
-      let user = await this.userModel.findOne({ email: 'admin@ulsesa.cmultickets.com' });
+      let user = await this.userModel.findOne({ email: 'admin@ulsesa.ticketr.org' });
       if (!user) {
         const hashedPassword = await bcrypt.hash('Password123!', 10);
         user = await this.userModel.create({
           tenantId: tenant._id.toString(),
           name: 'ULSESA Executive Committee',
-          email: 'admin@ulsesa.cmultickets.com',
+          email: 'admin@ulsesa.ticketr.org',
           passwordHash: hashedPassword,
           role: UserRole.ORGANIZER,
         });
-        this.logger.log('👤 Seeded Organizer Account: admin@ulsesa.cmultickets.com');
+        this.logger.log('👤 Seeded Organizer Account: admin@ulsesa.ticketr.org');
       }
 
       // 3. Seed Event: Dinner & Awards Night
@@ -86,6 +105,7 @@ export class SeedService implements OnModuleInit {
           soldCount: 0,
           maxPerPurchase: 5,
           isActive: true,
+          templateImageUrl: 'https://res.cloudinary.com/marquis/image/upload/v1786342609/avke8obpeqx39wcfioix.png',
         });
 
         // VIP Ticket: ₦25,000
@@ -97,6 +117,7 @@ export class SeedService implements OnModuleInit {
           soldCount: 0,
           maxPerPurchase: 5,
           isActive: true,
+          templateImageUrl: 'https://res.cloudinary.com/marquis/image/upload/v1786342611/idtlcrh9cqqav7rksnla.png',
         });
 
         // VVIP Ticket: ₦350,000 (Table of 10)
@@ -108,6 +129,7 @@ export class SeedService implements OnModuleInit {
           soldCount: 0,
           maxPerPurchase: 2,
           isActive: true,
+          templateImageUrl: 'https://res.cloudinary.com/marquis/image/upload/v1786342600/kdyxsuz5dwo9xu0coj14.jpg',
         });
 
         this.logger.log('🎟️ Seeded Ticket Tiers for ULSESA: Regular (₦15k), VIP (₦25k), VVIP Table of 10 (₦350k)');

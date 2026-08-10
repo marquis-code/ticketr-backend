@@ -58,7 +58,7 @@ async function run() {
 
   // 4. Organizer Login
   const { data: loginData } = await request('POST', '/auth/login', {
-    email: 'admin@ulsesa.cmultickets.com',
+    email: 'admin@ulsesa.ticketr.org',
     password: 'Password123!',
   });
   console.log(`\n4. ✅ Organizer Login Successful: ${loginData.user.name} (${loginData.user.role})`);

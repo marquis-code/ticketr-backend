@@ -13,7 +13,7 @@ export class CloudinaryService {
     });
   }
 
-  async uploadImage(file: Express.Multer.File, folder = 'cmultickets'): Promise<string> {
+  async uploadImage(file: Express.Multer.File, folder = 'ticketr'): Promise<string> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {

@@ -68,7 +68,7 @@ export class OrderService {
     customerEmail: string;
     customerPhone?: string;
     departmentCode?: string;
-    items: Array<{ tierId: string; quantity: number }>;
+    items: Array<{ tierId: string; quantity: number; attendees?: { name: string; email: string }[] }>;
     callbackUrl: string;
   }) {
     const event = await this.eventModel.findById(dto.eventId);
@@ -83,6 +83,7 @@ export class OrderService {
       unitPrice: number;
       quantity: number;
       subtotal: number;
+      attendees?: { name: string; email: string }[];
     }> = [];
 
     for (const item of dto.items) {
@@ -113,6 +114,7 @@ export class OrderService {
         unitPrice: tier.price,
         quantity: item.quantity,
         subtotal,
+        attendees: item.attendees,
       });
     }
 
@@ -226,6 +228,10 @@ export class OrderService {
           .update(`${order._id}-${formattedTicketCode}-${Date.now()}-${Math.random()}`)
           .digest('hex');
 
+        const attendeeInfo = item.attendees && item.attendees[i] 
+          ? item.attendees[i] 
+          : { name: order.customerName, email: order.customerEmail };
+
         const ticket = await this.ticketModel.create({
           tenantId: order.tenantId,
           eventId: order.eventId,
@@ -233,23 +239,34 @@ export class OrderService {
           tierId: item.tierId,
           ticketNumber: formattedTicketCode,
           departmentCode: order.departmentCode,
-          attendeeName: order.customerName,
-          attendeeEmail: order.customerEmail,
+          attendeeName: attendeeInfo.name,
+          attendeeEmail: attendeeInfo.email,
           qrCodeHash,
           status: TicketStatus.ISSUED,
         });
 
         issuedTickets.push(ticket);
 
+        let customImageUrl = tierDoc?.templateImageUrl || '';
+        if (customImageUrl && customImageUrl.includes('cloudinary.com')) {
+          const uploadIndex = customImageUrl.indexOf('/upload/');
+          if (uploadIndex !== -1) {
+            const encodedName = encodeURIComponent(attendeeInfo.name.toUpperCase());
+            const transformation = `l_text:Satoshi_30_bold:${encodedName},co_white,g_north,y_150/`;
+            customImageUrl = customImageUrl.slice(0, uploadIndex + 8) + transformation + customImageUrl.slice(uploadIndex + 8);
+          }
+        }
+
         await this.resendService.sendTicketEmail({
-          toEmail: order.customerEmail,
-          customerName: order.customerName,
+          toEmail: attendeeInfo.email,
+          customerName: attendeeInfo.name,
           eventName: event ? event.title : 'Event Ticket',
           eventDate: event ? new Date(event.startDate).toLocaleString() : '',
           eventLocation: event ? event.location : '',
           ticketNumber: formattedTicketCode,
           tierName: item.tierName,
           qrCodeHash,
+          ticketImageUrl: customImageUrl,
         });
       }
     }

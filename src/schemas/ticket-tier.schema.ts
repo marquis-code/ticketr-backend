@@ -23,6 +23,9 @@ export class TicketTier {
   @Prop({ default: 0, min: 0 })
   soldCount: number;
 
+  @Prop()
+  templateImageUrl?: string;
+
   @Prop({ default: 5, min: 1 })
   maxPerPurchase: number;
 
