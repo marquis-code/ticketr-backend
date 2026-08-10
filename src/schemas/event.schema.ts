@@ -27,6 +27,9 @@ export class Event {
   @Prop()
   bannerUrl?: string;
 
+  @Prop({ type: [String], default: [] })
+  carouselImages: string[];
+
   @Prop({ required: true })
   location: string; // Physical address or Virtual Meeting URL
 

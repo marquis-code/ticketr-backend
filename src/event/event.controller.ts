@@ -73,7 +73,7 @@ export class EventController {
   @Roles(UserRole.ORGANIZER)
   @Patch(':id')
   @UseInterceptors(FileInterceptor('banner'))
-  async updateEvent(
+  async updateEventBanner(
     @Request() req,
     @Param('id') eventId: string,
     @UploadedFile() file?: Express.Multer.File,
@@ -82,6 +82,65 @@ export class EventController {
       throw new BadRequestException('User must belong to an organization');
     }
     return this.eventService.updateEventBanner(eventId, req.user.tenantId, file);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
+  @Patch(':id/details')
+  async updateEventDetails(
+    @Request() req,
+    @Param('id') eventId: string,
+    @Body() body: any,
+  ) {
+    if (!req.user.tenantId) {
+      throw new BadRequestException('User must belong to an organization');
+    }
+    return this.eventService.updateEventDetails(eventId, req.user.tenantId, body);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
+  @Post(':id/tiers')
+  async addTicketTier(
+    @Request() req,
+    @Param('id') eventId: string,
+    @Body() body: any,
+  ) {
+    if (!req.user.tenantId) {
+      throw new BadRequestException('User must belong to an organization');
+    }
+    return this.eventService.addTicketTier(eventId, req.user.tenantId, body);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
+  @Patch(':id/tiers/:tierId')
+  async updateTicketTier(
+    @Request() req,
+    @Param('id') eventId: string,
+    @Param('tierId') tierId: string,
+    @Body() body: any,
+  ) {
+    if (!req.user.tenantId) {
+      throw new BadRequestException('User must belong to an organization');
+    }
+    return this.eventService.updateTicketTier(eventId, tierId, req.user.tenantId, body);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
+  @Patch(':id/tiers/:tierId/banner')
+  @UseInterceptors(FileInterceptor('banner'))
+  async updateTierBanner(
+    @Request() req,
+    @Param('id') eventId: string,
+    @Param('tierId') tierId: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!req.user.tenantId) {
+      throw new BadRequestException('User must belong to an organization');
+    }
+    return this.eventService.updateTierBanner(eventId, tierId, req.user.tenantId, file);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -137,6 +196,7 @@ export class EventController {
         startDate: new Date(body.startDate),
         endDate: new Date(body.endDate),
         tags: body.tags ? (typeof body.tags === 'string' ? body.tags.split(',') : body.tags) : [],
+        carouselImages: body.carouselImages ? (typeof body.carouselImages === 'string' ? JSON.parse(body.carouselImages) : body.carouselImages) : [],
         tiers: parsedTiers,
       },
       file,

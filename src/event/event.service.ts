@@ -29,6 +29,7 @@ export class EventService {
       startDate: Date;
       endDate: Date;
       tags?: string[];
+      carouselImages?: string[];
       tiers: Array<{
         name: string;
         description?: string;
@@ -60,7 +61,9 @@ export class EventService {
       startDate: dto.startDate,
       endDate: dto.endDate,
       tags: dto.tags || [],
+      status: EventStatus.DRAFT,
       bannerUrl,
+      carouselImages: dto.carouselImages || [],
       createdBy: userId,
     });
 
@@ -243,6 +246,75 @@ export class EventService {
       throw new NotFoundException('Event not found');
     }
     return event;
+  }
+
+  async updateEventDetails(eventId: string, tenantId: string, body: any) {
+    const updateData: any = {};
+    if (body.title) updateData.title = body.title;
+    if (body.description) updateData.description = body.description;
+    if (body.location) updateData.location = body.location;
+    if (body.carouselImages) updateData.carouselImages = body.carouselImages;
+
+    const event = await this.eventModel.findOneAndUpdate(
+      { _id: eventId, tenantId },
+      { $set: updateData },
+      { new: true }
+    );
+    if (!event) throw new NotFoundException('Event not found');
+    return event;
+  }
+
+  async addTicketTier(eventId: string, tenantId: string, body: any) {
+    const event = await this.eventModel.findOne({ _id: eventId, tenantId });
+    if (!event) throw new NotFoundException('Event not found');
+
+    const newTier = await this.ticketTierModel.create({
+      eventId,
+      name: body.name,
+      description: body.description || '',
+      price: body.price,
+      capacity: body.capacity,
+      maxPerPurchase: body.maxPerPurchase || 5,
+    });
+    return newTier;
+  }
+
+  async updateTicketTier(eventId: string, tierId: string, tenantId: string, body: any) {
+    const event = await this.eventModel.findOne({ _id: eventId, tenantId });
+    if (!event) throw new NotFoundException('Event not found');
+
+    const updateData: any = {};
+    if (body.name) updateData.name = body.name;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.price !== undefined) updateData.price = body.price;
+    if (body.capacity !== undefined) updateData.capacity = body.capacity;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+
+    const tier = await this.ticketTierModel.findOneAndUpdate(
+      { _id: tierId, eventId },
+      { $set: updateData },
+      { new: true }
+    );
+    if (!tier) throw new NotFoundException('Ticket Tier not found');
+    return tier;
+  }
+
+  async updateTierBanner(eventId: string, tierId: string, tenantId: string, bannerFile?: Express.Multer.File) {
+    const event = await this.eventModel.findOne({ _id: eventId, tenantId });
+    if (!event) throw new NotFoundException('Event not found');
+
+    if (!bannerFile) {
+      throw new BadRequestException('No image file provided');
+    }
+    const templateImageUrl = await this.cloudinaryService.uploadImage(bannerFile, 'ticketr/tickets');
+    
+    const tier = await this.ticketTierModel.findOneAndUpdate(
+      { _id: tierId, eventId },
+      { templateImageUrl },
+      { new: true }
+    );
+    if (!tier) throw new NotFoundException('Ticket Tier not found');
+    return tier;
   }
 
   async deleteEvent(eventId: string, tenantId: string) {
