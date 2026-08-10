@@ -40,6 +40,28 @@ export class EventController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @Get('superadmin/all')
+  async getAllEventsSuperAdmin() {
+    return this.eventService.getAllEventsForSuperAdmin();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @Patch('superadmin/:id/markup')
+  async updateEventMarkup(
+    @Param('id') eventId: string,
+    @Body() body: any,
+  ) {
+    return this.eventService.updateEventMarkup(
+      eventId,
+      body.markupFee,
+      body.markupFeeType,
+      body.markupStrategy
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
   @Get('admin/my-events')
   async getMyEvents(@Request() req) {
@@ -153,27 +175,7 @@ export class EventController {
     return this.eventService.deleteEvent(eventId, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
-  @Get('superadmin/all')
-  async getAllEventsSuperAdmin() {
-    return this.eventService.getAllEventsForSuperAdmin();
-  }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN)
-  @Patch('superadmin/:id/markup')
-  async updateEventMarkup(
-    @Param('id') eventId: string,
-    @Body() body: any,
-  ) {
-    return this.eventService.updateEventMarkup(
-      eventId,
-      body.markupFee,
-      body.markupFeeType,
-      body.markupStrategy
-    );
-  }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
