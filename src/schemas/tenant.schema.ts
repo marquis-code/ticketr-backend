@@ -41,14 +41,12 @@ export class Tenant {
   @Prop()
   paystackSubaccountCode?: string; // For split payouts to tenants
 
-  @Prop()
-  bankName?: string;
-
-  @Prop()
-  accountNumber?: string;
-
-  @Prop()
-  accountName?: string;
+  @Prop({ type: Object })
+  remittanceAccount?: {
+    bankName?: string;
+    accountNumber?: string;
+    accountName?: string;
+  };
 
   @Prop({ type: [String], default: [] })
   notificationEmails: string[];

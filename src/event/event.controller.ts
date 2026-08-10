@@ -71,6 +71,21 @@ export class EventController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
+  @Patch(':id')
+  @UseInterceptors(FileInterceptor('banner'))
+  async updateEvent(
+    @Request() req,
+    @Param('id') eventId: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!req.user.tenantId) {
+      throw new BadRequestException('User must belong to an organization');
+    }
+    return this.eventService.updateEventBanner(eventId, req.user.tenantId, file);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
   @Delete(':id')
   async deleteEvent(@Request() req, @Param('id') eventId: string) {
     if (!req.user.tenantId) {

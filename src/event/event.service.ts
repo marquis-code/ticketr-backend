@@ -229,6 +229,22 @@ export class EventService {
     return event;
   }
 
+  async updateEventBanner(eventId: string, tenantId: string, bannerFile?: Express.Multer.File) {
+    if (!bannerFile) {
+      throw new BadRequestException('No image file provided');
+    }
+    const bannerUrl = await this.cloudinaryService.uploadImage(bannerFile, 'ticketr/events');
+    const event = await this.eventModel.findOneAndUpdate(
+      { _id: eventId, tenantId },
+      { bannerUrl },
+      { new: true },
+    );
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+    return event;
+  }
+
   async deleteEvent(eventId: string, tenantId: string) {
     const result = await this.eventModel.deleteOne({ _id: eventId, tenantId });
     if (result.deletedCount === 0) {
