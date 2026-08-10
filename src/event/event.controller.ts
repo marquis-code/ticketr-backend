@@ -24,6 +24,11 @@ import { EventStatus } from '../schemas/event.schema';
 export class EventController {
   constructor(private eventService: EventService) {}
 
+  @Get('public/all')
+  async getAllPublicEvents() {
+    return this.eventService.getAllPublicEvents();
+  }
+
   @Get('tenant/:tenantSlug')
   async getTenantEvents(@Param('tenantSlug') tenantSlug: string) {
     return this.eventService.getEventsByTenantSlug(tenantSlug);

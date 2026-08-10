@@ -112,6 +112,31 @@ export class EventService {
     };
   }
 
+  async getAllPublicEvents() {
+    const events = await this.eventModel
+      .find({ status: EventStatus.PUBLISHED })
+      .sort({ startDate: 1 })
+      .exec();
+
+    const result = await Promise.all(
+      events.map(async (ev) => {
+        const tiers = await this.ticketTierModel.find({ eventId: ev._id.toString(), isActive: true }).exec();
+        const tenant = await this.tenantModel.findById(ev.tenantId).exec();
+        return {
+          ...ev.toObject(),
+          tiers,
+          tenant: tenant ? {
+            name: tenant.name,
+            slug: tenant.slug,
+            logoUrl: tenant.logoUrl,
+          } : null,
+        };
+      }),
+    );
+
+    return { events: result };
+  }
+
   async getEventBySlug(tenantSlug: string, eventSlug: string) {
     const tenant = await this.tenantModel.findOne({ slug: tenantSlug.toLowerCase() });
     if (!tenant) {
