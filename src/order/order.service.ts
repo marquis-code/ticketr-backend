@@ -257,6 +257,8 @@ export class OrderService {
 
         issuedTickets.push(ticket);
 
+        const qrCodeUrl = `https://admin.ticketr.org/verify/${qrCodeHash}`;
+
         let ticketImageBuffer: Buffer | undefined;
         let ticketPdfBuffer: Buffer | undefined;
         let customImageUrl = tierDoc?.templateImageUrl || '';
@@ -268,7 +270,7 @@ export class OrderService {
               templateImageUrl: customImageUrl,
               attendeeName: attendeeInfo.name,
               ticketNumber: formattedTicketCode,
-              qrCodeHash,
+              qrCodeHash: qrCodeUrl,
             });
             
             ticketPdfBuffer = await this.ticketGeneratorService.generateTicketPdf({
@@ -297,7 +299,7 @@ export class OrderService {
           eventLocation: event ? event.location : '',
           ticketNumber: formattedTicketCode,
           tierName: item.tierName,
-          qrCodeHash,
+          qrCodeHash: qrCodeUrl,
           ticketImageUrl: customImageUrl,
           ticketImageBuffer,
           ticketPdfBuffer,

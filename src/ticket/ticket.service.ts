@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { Ticket, TicketDocument, TicketStatus } from '../schemas/ticket.schema';
 import { Event, EventDocument } from '../schemas/event.schema';
 import { RedisService } from '../redis/redis.service';
+import { TicketGeneratorService } from '../ticket-generator/ticket-generator.service';
 
 @Injectable()
 export class TicketService {
@@ -11,6 +12,7 @@ export class TicketService {
     @InjectModel(Ticket.name) private ticketModel: Model<TicketDocument>,
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private redisService: RedisService,
+    private ticketGeneratorService: TicketGeneratorService,
   ) {}
 
   async verifyScan(qrCodeHash: string, scannedByUserId: string) {
@@ -79,5 +81,37 @@ export class TicketService {
       throw new NotFoundException(`Ticket '${ticketNumber}' not found`);
     }
     return ticket;
+  }
+
+  async downloadTicketPdf(ticketId: string): Promise<Buffer> {
+    const ticket = await this.ticketModel.findById(ticketId).populate('eventId').populate('tierId').exec();
+    if (!ticket) throw new NotFoundException('Ticket not found');
+    
+    const tier = ticket.tierId as any;
+    const event = ticket.eventId as any;
+    
+    if (!tier || !tier.templateImageUrl) {
+      throw new BadRequestException('This ticket tier does not support custom PDF generation');
+    }
+
+    // Pass the full URL to the QR code generator so it's scannable
+    const qrCodeUrl = `https://admin.ticketr.org/verify/${ticket.qrCodeHash}`;
+
+    const ticketImageBuffer = await this.ticketGeneratorService.generateTicketImage({
+      templateImageUrl: tier.templateImageUrl,
+      attendeeName: ticket.attendeeName,
+      ticketNumber: ticket.ticketNumber,
+      qrCodeHash: qrCodeUrl,
+    });
+
+    return this.ticketGeneratorService.generateTicketPdf({
+      ticketImageBuffer,
+      attendeeName: ticket.attendeeName,
+      eventName: event.title || 'Event Ticket',
+      eventDate: event.startDate ? new Date(event.startDate).toLocaleString() : '',
+      eventLocation: event.location || '',
+      ticketNumber: ticket.ticketNumber,
+      tierName: tier.name,
+    });
   }
 }

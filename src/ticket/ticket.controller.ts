@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, Request, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { TicketService } from './ticket.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -21,6 +22,17 @@ export class TicketController {
   @Get('event/:eventId')
   async getTicketsForEvent(@Param('eventId') eventId: string) {
     return this.ticketService.getTicketsForEvent(eventId);
+  }
+
+  @Get(':id/pdf')
+  async downloadTicketPdf(@Param('id') id: string, @Res() res: Response) {
+    const buffer = await this.ticketService.downloadTicketPdf(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="ticket-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
   }
 
   @Get('lookup/:ticketNumber')
