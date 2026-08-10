@@ -122,13 +122,17 @@ export class ResendService {
         });
       }
 
-      await this.resend.emails.send({
+      const { error } = await this.resend.emails.send({
         from: this.fromEmail,
         to: payload.toEmail,
         subject: `🎟️ Your Ticket for ${payload.eventName} - ${payload.ticketNumber}`,
         html: htmlContent,
         attachments: attachments.length > 0 ? attachments : undefined,
       });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
 
       this.logger.log(`Email with PDF ticket dispatched to ${payload.toEmail}`);
       return { success: true };
@@ -209,12 +213,16 @@ export class ResendService {
         return { success: true, mock: true };
       }
 
-      await this.resend.emails.send({
+      const { error } = await this.resend.emails.send({
         from: this.fromEmail,
         to: payload.emails,
         subject: `🔔 New Order: ₦${payload.totalAmount.toLocaleString()} - ${payload.eventName}`,
         html: htmlContent,
       });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
 
       this.logger.log(`Order notification dispatched to ${payload.emails.join(', ')}`);
       return { success: true };
