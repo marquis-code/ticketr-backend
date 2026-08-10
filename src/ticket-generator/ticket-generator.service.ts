@@ -36,6 +36,7 @@ export class TicketGeneratorService {
     attendeeName: string;
     ticketNumber: string;
     qrCodeHash: string;
+    departmentCode?: string;
   }): Promise<Buffer> {
     // 1. Download the template image
     const templateBuffer = await this.downloadImage(params.templateImageUrl);
@@ -77,6 +78,22 @@ export class TicketGeneratorService {
     `);
     const ticketOverlay = await sharp(ticketSvg).png().toBuffer();
 
+    // Create department code overlay if provided
+    let deptOverlay: Buffer | null = null;
+    let deptNumTop = 0;
+    if (params.departmentCode) {
+      const deptSvg = Buffer.from(`
+        <svg width="${imgWidth}" height="${Math.round(ticketFontSize * 2.5)}">
+          <style>
+            .dept-num { font-family: sans-serif; font-weight: 700; font-size: ${Math.round(ticketFontSize * 0.9)}px; fill: #FFD700; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
+          </style>
+          <text x="${Math.round(imgWidth * 0.45)}" y="${Math.round(ticketFontSize * 1.5)}" text-anchor="middle" class="dept-num">DEPT: ${this.escapeXml(params.departmentCode.toUpperCase())}</text>
+        </svg>
+      `);
+      deptOverlay = await sharp(deptSvg).png().toBuffer();
+      deptNumTop = Math.round(imgHeight * 0.16); // Below ticket number
+    }
+
     // 5. Add white background behind QR code
     const qrPadding = Math.round(qrSize * 0.1);
     const qrWithBg = await sharp({
@@ -99,12 +116,18 @@ export class TicketGeneratorService {
     const qrTop = Math.round(imgHeight * 0.72);
     const qrLeft = Math.round(imgWidth * 0.87 - (qrSize + qrPadding * 2) / 2);
 
+    const composites: any[] = [
+      { input: nameOverlay, top: nameTop, left: 0 },
+      { input: ticketOverlay, top: ticketNumTop, left: 0 },
+      { input: qrWithBg, top: qrTop, left: qrLeft },
+    ];
+    
+    if (deptOverlay) {
+      composites.push({ input: deptOverlay, top: deptNumTop, left: 0 });
+    }
+
     const composited = await sharp(templateBuffer)
-      .composite([
-        { input: nameOverlay, top: nameTop, left: 0 },
-        { input: ticketOverlay, top: ticketNumTop, left: 0 },
-        { input: qrWithBg, top: qrTop, left: qrLeft },
-      ])
+      .composite(composites)
       .png()
       .toBuffer();
 
