@@ -45,6 +45,16 @@ export class OrderController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
+  @Get('admin/my-orders')
+  async getMyOrders(@Request() req) {
+    if (!req.user.tenantId) {
+      throw new BadRequestException('User must belong to a tenant');
+    }
+    return this.orderService.getTenantOrders(req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
   @Get('tenant')
   async getTenantOrders(@Request() req) {
     if (!req.user.tenantId) {
