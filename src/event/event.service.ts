@@ -322,7 +322,7 @@ export class EventService {
     if (result.deletedCount === 0) {
       throw new NotFoundException('Event not found');
     }
-    await this.orderModel.deleteMany({ eventId });
+    await this.ticketTierModel.deleteMany({ eventId });
     return { success: true };
   }
 
