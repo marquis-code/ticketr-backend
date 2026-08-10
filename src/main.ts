@@ -6,7 +6,27 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: true, // Allow production domains & local subdomains
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) {
+        return callback(null, true);
+      }
+      const allowedDomains = [
+        /^https?:\/\/localhost(:\d+)?$/,
+        /^https?:\/\/ticketr\.org$/,
+        /^https?:\/\/www\.ticketr\.org$/,
+        /^https?:\/\/[a-zA-Z0-9-]+\.ticketr\.org$/, // all dynamic subdomains
+        /^https?:\/\/ticketr-admin\.onrender\.com$/,
+        /^https?:\/\/ticketr-superadmin\.onrender\.com$/,
+      ];
+
+      const isAllowed = allowedDomains.some((regex) => regex.test(origin));
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   });
 
