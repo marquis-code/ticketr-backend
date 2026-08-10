@@ -10,6 +10,16 @@ export enum EventStatus {
   COMPLETED = 'COMPLETED',
 }
 
+export enum MarkupFeeType {
+  FLAT = 'FLAT',
+  PERCENTAGE = 'PERCENTAGE',
+}
+
+export enum MarkupStrategy {
+  ADD_TO_FEE = 'ADD_TO_FEE',
+  DEDUCT_FROM_FEE = 'DEDUCT_FROM_FEE',
+}
+
 @Schema({ timestamps: true })
 export class Event {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Tenant', required: true, index: true })
@@ -44,6 +54,15 @@ export class Event {
 
   @Prop({ type: String, enum: EventStatus, default: EventStatus.PUBLISHED, index: true })
   status: EventStatus;
+
+  @Prop({ default: 0 })
+  markupFee: number;
+
+  @Prop({ type: String, enum: MarkupFeeType, default: MarkupFeeType.FLAT })
+  markupFeeType: MarkupFeeType;
+
+  @Prop({ type: String, enum: MarkupStrategy, default: MarkupStrategy.ADD_TO_FEE })
+  markupStrategy: MarkupStrategy;
 
   @Prop({ type: [String], default: [] })
   tags: string[];

@@ -161,6 +161,21 @@ export class EventController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @Patch('superadmin/:id/markup')
+  async updateEventMarkup(
+    @Param('id') eventId: string,
+    @Body() body: any,
+  ) {
+    return this.eventService.updateEventMarkup(
+      eventId,
+      body.markupFee,
+      body.markupFeeType,
+      body.markupStrategy
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
   @Post()
   @UseInterceptors(FileInterceptor('banner'))

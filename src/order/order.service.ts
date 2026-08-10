@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Order, OrderDocument, OrderStatus } from '../schemas/order.schema';
 import { TicketTier, TicketTierDocument } from '../schemas/ticket-tier.schema';
-import { Event, EventDocument } from '../schemas/event.schema';
+import { Event, EventDocument, MarkupFeeType, MarkupStrategy } from '../schemas/event.schema';
 import { Tenant, TenantDocument } from '../schemas/tenant.schema';
 import { Ticket, TicketDocument, TicketStatus } from '../schemas/ticket.schema';
 import { PaystackService } from '../paystack/paystack.service';
@@ -123,6 +123,19 @@ export class OrderService {
     const orderNumber = `CMT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     const paystackRef = `REF-${orderNumber}`;
 
+    let markupAmount = 0;
+    if (event.markupFee > 0) {
+      if (event.markupFeeType === MarkupFeeType.PERCENTAGE) {
+        markupAmount = (event.markupFee / 100) * totalAmount;
+      } else {
+        markupAmount = event.markupFee;
+      }
+    }
+
+    if (markupAmount > 0 && event.markupStrategy === MarkupStrategy.ADD_TO_FEE) {
+      totalAmount += markupAmount;
+    }
+
     const order = await this.orderModel.create({
       tenantId: dto.tenantId,
       eventId: dto.eventId,
@@ -141,7 +154,7 @@ export class OrderService {
     const tenant = await this.tenantModel.findById(dto.tenantId);
 
     const amountInKobo = Math.round(totalAmount * 100);
-    const paystackResponse = await this.paystackService.initializeTransaction({
+    const paystackPayload: any = {
       email: dto.customerEmail,
       amountInKobo,
       reference: paystackRef,
@@ -153,7 +166,14 @@ export class OrderService {
         tenantId: dto.tenantId,
         departmentCode: dto.departmentCode,
       },
-    });
+    };
+
+    if (markupAmount > 0) {
+      paystackPayload.transaction_charge = Math.round(markupAmount * 100);
+      paystackPayload.bearer = 'account';
+    }
+
+    const paystackResponse = await this.paystackService.initializeTransaction(paystackPayload);
 
     order.paystackAccessCode = paystackResponse.access_code;
     await order.save();

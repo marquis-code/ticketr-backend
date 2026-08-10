@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Event, EventDocument, EventStatus } from '../schemas/event.schema';
+import { Event, EventDocument, EventStatus, MarkupFeeType, MarkupStrategy } from '../schemas/event.schema';
 import { TicketTier, TicketTierDocument } from '../schemas/ticket-tier.schema';
 import { Tenant, TenantDocument } from '../schemas/tenant.schema';
 import { Ticket, TicketDocument } from '../schemas/ticket.schema';
@@ -322,8 +322,25 @@ export class EventService {
     if (result.deletedCount === 0) {
       throw new NotFoundException('Event not found');
     }
-    await this.ticketTierModel.deleteMany({ eventId });
-    return { message: 'Event deleted successfully' };
+    await this.orderModel.deleteMany({ eventId });
+    return { success: true };
+  }
+
+  async updateEventMarkup(
+    eventId: string,
+    markupFee: number,
+    markupFeeType: MarkupFeeType,
+    markupStrategy: MarkupStrategy,
+  ) {
+    const event = await this.eventModel.findByIdAndUpdate(
+      eventId,
+      { markupFee, markupFeeType, markupStrategy },
+      { new: true },
+    );
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+    return event;
   }
 
   async getAllEventsForSuperAdmin() {

@@ -20,6 +20,8 @@ export class PaystackService {
     reference: string;
     callbackUrl: string;
     subaccount?: string;
+    transaction_charge?: number;
+    bearer?: string;
     metadata?: any;
   }) {
     if (this.secretKey.startsWith('sk_test_mock')) {
@@ -42,6 +44,12 @@ export class PaystackService {
 
       if (payload.subaccount) {
         body.subaccount = payload.subaccount;
+      }
+      if (payload.transaction_charge !== undefined) {
+        body.transaction_charge = payload.transaction_charge;
+      }
+      if (payload.bearer) {
+        body.bearer = payload.bearer;
       }
 
       const response = await axios.post(
