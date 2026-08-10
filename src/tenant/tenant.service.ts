@@ -45,6 +45,14 @@ export class TenantService {
   }
 
   async updateTenant(id: string, updates: Partial<Tenant>) {
+    if (updates.slug) {
+      const cleanSlug = updates.slug.toLowerCase().trim();
+      const existing = await this.tenantModel.findOne({ slug: cleanSlug, _id: { $ne: id } });
+      if (existing) {
+        throw new BadRequestException('Tenant subdomain already taken');
+      }
+      updates.slug = cleanSlug;
+    }
     const tenant = await this.tenantModel.findByIdAndUpdate(id, updates, { new: true });
     if (!tenant) {
       throw new NotFoundException('Tenant not found');
