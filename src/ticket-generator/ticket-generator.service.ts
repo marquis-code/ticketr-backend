@@ -58,9 +58,9 @@ export class TicketGeneratorService {
     const nameSvg = Buffer.from(`
       <svg width="${imgWidth}" height="${Math.round(fontSize * 2.5)}">
         <style>
-          .name { font-family: sans-serif; font-weight: 800; font-size: ${fontSize}px; fill: #FFD700; }
+          .name { font-family: sans-serif; font-weight: 800; font-size: ${fontSize}px; fill: #FFD700; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); }
         </style>
-        <text x="${Math.round(imgWidth * 0.35)}" y="${Math.round(fontSize * 1.5)}" text-anchor="middle" class="name">${this.escapeXml(nameText)}</text>
+        <text x="${Math.round(imgWidth * 0.45)}" y="${Math.round(fontSize * 1.5)}" text-anchor="middle" class="name">${this.escapeXml(nameText)}</text>
       </svg>
     `);
     const nameOverlay = await sharp(nameSvg).png().toBuffer();
@@ -70,9 +70,9 @@ export class TicketGeneratorService {
     const ticketSvg = Buffer.from(`
       <svg width="${imgWidth}" height="${Math.round(ticketFontSize * 2.5)}">
         <style>
-          .ticket-num { font-family: monospace; font-weight: 700; font-size: ${ticketFontSize}px; fill: #ffffff; }
+          .ticket-num { font-family: monospace; font-weight: 700; font-size: ${ticketFontSize}px; fill: #ffffff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
         </style>
-        <text x="${Math.round(imgWidth * 0.35)}" y="${Math.round(ticketFontSize * 1.5)}" text-anchor="middle" class="ticket-num">TICKET: ${this.escapeXml(params.ticketNumber)}</text>
+        <text x="${Math.round(imgWidth * 0.45)}" y="${Math.round(ticketFontSize * 1.5)}" text-anchor="middle" class="ticket-num">TICKET: ${this.escapeXml(params.ticketNumber)}</text>
       </svg>
     `);
     const ticketOverlay = await sharp(ticketSvg).png().toBuffer();
@@ -84,7 +84,7 @@ export class TicketGeneratorService {
         width: qrSize + qrPadding * 2,
         height: qrSize + qrPadding * 2,
         channels: 4,
-        background: { r: 255, g: 255, b: 255, alpha: 230 },
+        background: { r: 255, g: 255, b: 255, alpha: 255 },
       },
     })
       .composite([{ input: qrBuffer, top: qrPadding, left: qrPadding }])
@@ -92,12 +92,12 @@ export class TicketGeneratorService {
       .toBuffer();
 
     // 6. Composite everything onto the template
-    // Place name at ~82% from top, centered on the left portion
-    // Place QR at bottom-right of the stub area
-    const nameTop = Math.round(imgHeight * 0.80);
-    const ticketNumTop = Math.round(imgHeight * 0.88);
-    const qrTop = Math.round(imgHeight * 0.45 - (qrSize + qrPadding * 2) / 2);
-    const qrLeft = Math.round(imgWidth * 0.82 - (qrSize + qrPadding * 2) / 2);
+    // Place name at ~6% from top, centered horizontally (shifted slightly left to account for stub)
+    // Place QR at bottom of the right stub (~72% from top, ~87% from left)
+    const nameTop = Math.round(imgHeight * 0.04);
+    const ticketNumTop = Math.round(imgHeight * 0.11);
+    const qrTop = Math.round(imgHeight * 0.72);
+    const qrLeft = Math.round(imgWidth * 0.87 - (qrSize + qrPadding * 2) / 2);
 
     const composited = await sharp(templateBuffer)
       .composite([
