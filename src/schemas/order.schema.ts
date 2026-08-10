@@ -26,8 +26,8 @@ export class OrderItem {
   @Prop({ required: true })
   subtotal: number;
 
-  @Prop({ type: [{ name: String, email: String }] })
-  attendees?: { name: string; email: string }[];
+  @Prop({ type: [{ name: String, email: String, departmentCode: String }] })
+  attendees?: { name: string; email: string; departmentCode?: string }[];
 }
 
 @Schema({ timestamps: true })

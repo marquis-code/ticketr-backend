@@ -223,11 +223,17 @@ export class OrderService {
       for (let i = 0; i < item.quantity; i++) {
         const ticketIndex = startTicketIndex + i;
 
+        const attendeeInfo = item.attendees && item.attendees[i] 
+          ? item.attendees[i] 
+          : { name: order.customerName, email: order.customerEmail, departmentCode: order.departmentCode };
+
+        const attendeeDepartment = attendeeInfo.departmentCode || order.departmentCode;
+
         // Structured code: V/T01/EDM, R/T10/TVESA, VV/T02/ULSESA
         const formattedTicketCode = generateStructuredTicketCode(
           item.tierName,
           ticketIndex,
-          order.departmentCode,
+          attendeeDepartment,
           tenant ? tenant.slug : 'EDM',
         );
 
@@ -236,17 +242,13 @@ export class OrderService {
           .update(`${order._id}-${formattedTicketCode}-${Date.now()}-${Math.random()}`)
           .digest('hex');
 
-        const attendeeInfo = item.attendees && item.attendees[i] 
-          ? item.attendees[i] 
-          : { name: order.customerName, email: order.customerEmail };
-
         const ticket = await this.ticketModel.create({
           tenantId: order.tenantId,
           eventId: order.eventId,
           orderId: order._id.toString(),
           tierId: item.tierId,
           ticketNumber: formattedTicketCode,
-          departmentCode: order.departmentCode,
+          departmentCode: attendeeDepartment,
           attendeeName: attendeeInfo.name,
           attendeeEmail: attendeeInfo.email,
           qrCodeHash,
