@@ -9,6 +9,7 @@ import { Tenant, TenantSchema } from '../schemas/tenant.schema';
 import { Ticket, TicketSchema } from '../schemas/ticket.schema';
 import { PaystackModule } from '../paystack/paystack.module';
 import { ResendModule } from '../resend/resend.module';
+import { TicketGeneratorModule } from '../ticket-generator/ticket-generator.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ResendModule } from '../resend/resend.module';
     ]),
     PaystackModule,
     ResendModule,
+    TicketGeneratorModule,
   ],
   controllers: [OrderController],
   providers: [OrderService],

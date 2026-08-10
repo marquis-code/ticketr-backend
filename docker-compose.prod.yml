@@ -1,0 +1,63 @@
+services:
+  reverse-proxy:
+    image: traefik:v3.6
+    restart: always
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--certificatesresolvers.ticketrresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.ticketrresolver.acme.email=abahmarquis@gmail.com"
+      - "--certificatesresolvers.ticketrresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "./letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - ticketr-net
+    labels:
+      - "traefik.enable=true"
+      # HTTP-to-HTTPS Redirect
+      - "traefik.http.routers.http-catchall.entrypoints=web"
+      - "traefik.http.routers.http-catchall.rule=HostRegexp(`{host:.+}`)"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - redis_data:/var/lib/redis/data
+    networks:
+      - ticketr-net
+
+  api:
+    image: "ghcr.io/viyn-labs/cloza-backend:main"
+    restart: unless-stopped
+    depends_on: [reverse-proxy, redis]
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    networks:
+      - ticketr-net
+    labels:
+      - "traefik.enable=true"
+      # ─── NO CORS middleware at Traefik level ───
+      # CORS is handled entirely by NestJS to avoid duplicate headers.
+      # HTTPS router
+      - "traefik.http.routers.api.rule=Host(`api.ticketr.org`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=ticketrresolver"
+      - "traefik.http.services.api.loadbalancer.server.port=3000"
+
+networks:
+  ticketr-net:
+
+volumes:
+  redis_data:

@@ -9,6 +9,7 @@ import { Ticket, TicketDocument, TicketStatus } from '../schemas/ticket.schema';
 import { PaystackService } from '../paystack/paystack.service';
 import { ResendService } from '../resend/resend.service';
 import { RedisService } from '../redis/redis.service';
+import { TicketGeneratorService } from '../ticket-generator/ticket-generator.service';
 import * as crypto from 'crypto';
 
 function generateStructuredTicketCode(
@@ -59,6 +60,7 @@ export class OrderService {
     private paystackService: PaystackService,
     private resendService: ResendService,
     private redisService: RedisService,
+    private ticketGeneratorService: TicketGeneratorService,
   ) {}
 
   async createOrder(dto: {
@@ -198,11 +200,17 @@ export class OrderService {
     order.paidAt = new Date();
     await order.save();
 
+    const tenant = await this.tenantModel.findById(order.tenantId).exec();
+
+    let orderTotalAmount = order.totalAmount;
+    const ticketDetailsList: string[] = [];
+
     const event = await this.eventModel.findById(order.eventId);
-    const tenant = await this.tenantModel.findById(order.tenantId);
     const issuedTickets: any[] = [];
 
     for (const item of order.items) {
+      ticketDetailsList.push(`- ${item.quantity}x ${item.tierName} (₦${item.subtotal.toLocaleString()})`);
+      
       const tierDoc = await this.ticketTierModel.findByIdAndUpdate(
         item.tierId,
         { $inc: { soldCount: item.quantity } },
@@ -247,13 +255,35 @@ export class OrderService {
 
         issuedTickets.push(ticket);
 
+        let ticketImageBuffer: Buffer | undefined;
+        let ticketPdfBuffer: Buffer | undefined;
         let customImageUrl = tierDoc?.templateImageUrl || '';
-        if (customImageUrl && customImageUrl.includes('cloudinary.com')) {
-          const uploadIndex = customImageUrl.indexOf('/upload/');
-          if (uploadIndex !== -1) {
-            const encodedName = encodeURIComponent(attendeeInfo.name.toUpperCase());
-            const transformation = `l_text:Satoshi_30_bold:${encodedName},co_white,g_north,y_150/`;
-            customImageUrl = customImageUrl.slice(0, uploadIndex + 8) + transformation + customImageUrl.slice(uploadIndex + 8);
+        
+        // If template image exists, generate composited image & PDF
+        if (customImageUrl) {
+          try {
+            ticketImageBuffer = await this.ticketGeneratorService.generateTicketImage({
+              templateImageUrl: customImageUrl,
+              attendeeName: attendeeInfo.name,
+              ticketNumber: formattedTicketCode,
+              qrCodeHash,
+            });
+            
+            ticketPdfBuffer = await this.ticketGeneratorService.generateTicketPdf({
+              ticketImageBuffer,
+              attendeeName: attendeeInfo.name,
+              eventName: event ? event.title : 'Event Ticket',
+              eventDate: event ? new Date(event.startDate).toLocaleString() : '',
+              eventLocation: event ? event.location : '',
+              ticketNumber: formattedTicketCode,
+              tierName: item.tierName,
+            });
+            
+            // We use the generated buffer inline now, so clear the URL
+            customImageUrl = '';
+          } catch (error) {
+            this.logger.error(`Failed to generate custom ticket for ${formattedTicketCode}`, error);
+            // Fallback to original URL behavior or standard ticket if generation fails
           }
         }
 
@@ -267,8 +297,22 @@ export class OrderService {
           tierName: item.tierName,
           qrCodeHash,
           ticketImageUrl: customImageUrl,
+          ticketImageBuffer,
+          ticketPdfBuffer,
         });
       }
+    }
+
+    if (tenant && tenant.notificationEmails && tenant.notificationEmails.length > 0) {
+      await this.resendService.sendOrderNotificationToAdmins({
+        emails: tenant.notificationEmails,
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        orderNumber: order.orderNumber,
+        totalAmount: orderTotalAmount,
+        eventName: 'Ticketr Event', // If you have event name logic here, we can improve it. But normally order has multiple items. We'll use the first event if available.
+        ticketDetails: ticketDetailsList.join('\n'),
+      });
     }
 
     return {

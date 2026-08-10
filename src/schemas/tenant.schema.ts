@@ -40,6 +40,9 @@ export class Tenant {
 
   @Prop()
   paystackSubaccountCode?: string; // For split payouts to tenants
+
+  @Prop({ type: [String], default: [] })
+  notificationEmails: string[];
 }
 
 export const TenantSchema = SchemaFactory.createForClass(Tenant);
