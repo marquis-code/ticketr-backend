@@ -104,4 +104,35 @@ export class PaystackService {
 
     return hash === signatureHeader;
   }
+
+  async getBanks() {
+    try {
+      const response = await axios.get('https://api.paystack.co/bank?country=nigeria', {
+        headers: {
+          Authorization: `Bearer ${this.secretKey}`,
+        },
+      });
+      return response.data.data;
+    } catch (error) {
+      this.logger.error('Failed to fetch banks from Paystack', error?.response?.data || error.message);
+      throw new BadRequestException('Failed to fetch banks');
+    }
+  }
+
+  async resolveAccountNumber(accountNumber: string, bankCode: string) {
+    try {
+      const response = await axios.get(
+        `https://api.paystack.co/bank/resolve?account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.secretKey}`,
+          },
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Failed to resolve account number ${accountNumber} with bank ${bankCode}`, error?.response?.data || error.message);
+      throw new BadRequestException(error?.response?.data?.message || 'Failed to resolve account number');
+    }
+  }
 }

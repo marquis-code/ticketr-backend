@@ -42,8 +42,17 @@ export class Tenant {
   paystackSubaccountCode?: string; // For split payouts to tenants
 
   @Prop({ type: Object })
-  remittanceAccount?: {
+  primaryRemittanceAccount?: {
     bankName?: string;
+    bankCode?: string;
+    accountNumber?: string;
+    accountName?: string;
+  };
+
+  @Prop({ type: Object })
+  secondaryRemittanceAccount?: {
+    bankName?: string;
+    bankCode?: string;
     accountNumber?: string;
     accountName?: string;
   };
