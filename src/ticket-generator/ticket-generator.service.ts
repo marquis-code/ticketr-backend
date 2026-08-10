@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import sharp from 'sharp';
-import * as PDFDocument from 'pdfkit';
+import PDFDocument from 'pdfkit';
 import * as QRCode from 'qrcode';
 import * as https from 'https';
 import * as http from 'http';
