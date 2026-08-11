@@ -43,40 +43,40 @@ export class ResendService {
         <html>
         <head>
           <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 20px; }
-            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; }
-            .header { background: #0F4D3F; padding: 24px 30px; color: #ffffff; text-align: center; }
-            .header h1 { margin: 0; font-size: 22px; font-weight: 700; }
-            .header p { margin: 6px 0 0; opacity: 0.85; font-size: 14px; }
-            .body { padding: 24px 30px; }
-            .ticket-image-container { text-align: center; margin: 0 0 20px; }
-            .ticket-image-container img { width: 100%; max-width: 560px; height: auto; border-radius: 10px; border: 1px solid #e2e8f0; }
-            .info-row { display: flex; margin-bottom: 14px; }
-            .info-row .label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; letter-spacing: 0.5px; min-width: 100px; }
-            .info-row .value { font-size: 14px; font-weight: 600; color: #0f172a; }
-            .qr-container { text-align: center; margin: 20px 0 10px; padding: 16px; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; }
-            .qr-container img { width: 180px; height: 180px; }
-            .footer { text-align: center; padding: 16px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; }
-            table.info-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-            table.info-table td { padding: 8px 0; vertical-align: top; }
-            table.info-table td.label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; letter-spacing: 0.5px; width: 120px; }
-            table.info-table td.value { font-size: 14px; font-weight: 600; color: #0f172a; }
+            body { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; color: #111827; margin: 0; padding: 40px 20px; }
+            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #e5e7eb; }
+            .header { background: #ffffff; padding: 40px 30px 20px; text-align: center; border-bottom: 1px solid #f3f4f6; }
+            .header img { height: 48px; margin-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 24px; font-weight: 800; color: #111827; }
+            .header p { margin: 8px 0 0; color: #6b7280; font-size: 15px; }
+            .body { padding: 30px; }
+            .greeting { font-size: 16px; margin-bottom: 24px; color: #374151; line-height: 1.5; text-align: center; }
+            .qr-container { text-align: center; margin: 0 0 30px; padding: 24px; background: #f8fafc; border-radius: 16px; border: 1px dashed #cbd5e1; }
+            .qr-container img { width: 220px; height: 220px; margin-bottom: 12px; }
+            .qr-container p { margin: 0; font-size: 13px; color: #64748b; font-weight: 500; }
+            table.info-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 16px; background: #f9fafb; border-radius: 16px; overflow: hidden; }
+            table.info-table td { padding: 16px 20px; vertical-align: middle; border-bottom: 1px solid #f3f4f6; }
+            table.info-table tr:last-child td { border-bottom: none; }
+            table.info-table td.label { font-size: 12px; text-transform: uppercase; color: #6b7280; font-weight: 700; letter-spacing: 0.5px; width: 35%; background: #f3f4f6; }
+            table.info-table td.value { font-size: 15px; font-weight: 600; color: #111827; }
+            .footer { text-align: center; padding: 24px; font-size: 13px; color: #9ca3af; background: #f9fafb; }
+            .footer a { color: #0F4D3F; text-decoration: none; font-weight: 600; }
           </style>
         </head>
         <body>
           <div class="card">
             <div class="header">
+              <img src="https://res.cloudinary.com/marquis/image/upload/v1786452024/ticketr_djxoz9.png" alt="Ticketr Logo" />
               <h1>🎟️ Your Event Ticket</h1>
-              <p>Ticketr Ticket Confirmation</p>
+              <p>Booking Confirmed</p>
             </div>
             <div class="body">
-              <p style="margin-bottom:20px;">Hi <strong>${payload.customerName}</strong>, your ticket for <strong>${payload.eventName}</strong> is confirmed!</p>
+              <div class="greeting">Hi <strong>${payload.customerName}</strong>, your ticket for <strong>${payload.eventName}</strong> is confirmed and ready!</div>
               
-              ${ticketImageCid
-                ? `<div class="ticket-image-container"><img src="cid:${ticketImageCid}" alt="Your Ticket" /></div>`
-                : (payload.ticketImageUrl
-                  ? `<div class="ticket-image-container"><img src="${payload.ticketImageUrl}" alt="Your Ticket" /></div>`
-                  : '')}
+              <div class="qr-container">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payload.qrCodeHash)}" alt="Ticket QR Code" />
+                <p>Present this QR Code at gate entry</p>
+              </div>
 
               <table class="info-table">
                 <tr><td class="label">Event</td><td class="value">${payload.eventName}</td></tr>
@@ -85,14 +85,9 @@ export class ResendService {
                 <tr><td class="label">Ticket Type</td><td class="value">${payload.tierName}</td></tr>
                 <tr><td class="label">Ticket No.</td><td class="value">${payload.ticketNumber}</td></tr>
               </table>
-
-              <div class="qr-container">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payload.qrCodeHash)}" alt="Ticket QR Code" />
-                <p style="font-size: 11px; color: #64748b; margin: 8px 0 0;">Present this QR Code at gate entry</p>
-              </div>
             </div>
             <div class="footer">
-              Powered by <strong>Ticketr</strong> | <a href="https://www.ticketr.org" style="color: #94a3b8; text-decoration: none;">www.ticketr.org</a>
+              Powered by <strong>Ticketr</strong> | <a href="https://www.ticketr.org">www.ticketr.org</a>
             </div>
           </div>
         </body>
@@ -159,26 +154,28 @@ export class ResendService {
         <html>
         <head>
           <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; color: #0f172a; margin: 0; padding: 20px; }
-            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
-            .header { background: #0F4D3F; padding: 20px; color: #ffffff; text-align: center; }
-            .header h1 { margin: 0; font-size: 20px; font-weight: 700; }
-            .body { padding: 20px; }
-            .info-row { display: flex; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; }
+            body { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; color: #111827; margin: 0; padding: 40px 20px; }
+            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #e5e7eb; }
+            .header { background: #ffffff; padding: 40px 30px 20px; text-align: center; border-bottom: 1px solid #f3f4f6; }
+            .header img { height: 48px; margin-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 24px; font-weight: 800; color: #111827; }
+            .header p { margin: 8px 0 0; color: #6b7280; font-size: 15px; }
+            .body { padding: 30px; }
+            .info-row { display: flex; margin-bottom: 12px; border-bottom: 1px solid #f3f4f6; padding-bottom: 12px; align-items: center; }
             .info-row:last-child { border-bottom: none; }
-            .label { font-size: 12px; text-transform: uppercase; color: #64748b; font-weight: 600; min-width: 120px; }
-            .value { font-size: 14px; font-weight: 600; color: #0f172a; }
-            .footer { text-align: center; padding: 16px; font-size: 11px; color: #94a3b8; background: #f8fafc; }
+            .label { font-size: 12px; text-transform: uppercase; color: #6b7280; font-weight: 700; letter-spacing: 0.5px; min-width: 130px; }
+            .value { font-size: 15px; font-weight: 600; color: #111827; }
+            .footer { text-align: center; padding: 24px; font-size: 13px; color: #9ca3af; background: #f9fafb; }
           </style>
         </head>
         <body>
           <div class="card">
             <div class="header">
+              <img src="https://res.cloudinary.com/marquis/image/upload/v1786452024/ticketr_djxoz9.png" alt="Ticketr Logo" />
               <h1>🔔 New Order Received</h1>
+              <p>A new payment has been successfully processed</p>
             </div>
             <div class="body">
-              <p>A new payment has been successfully processed on Ticketr.</p>
-              
               <div class="info-row">
                 <div class="label">Event</div>
                 <div class="value">${payload.eventName}</div>
@@ -193,11 +190,11 @@ export class ResendService {
               </div>
               <div class="info-row">
                 <div class="label">Total Paid</div>
-                <div class="value">₦${payload.totalAmount.toLocaleString()}</div>
+                <div class="value" style="color: #059669; font-size: 18px;">₦${payload.totalAmount.toLocaleString()}</div>
               </div>
               <div class="info-row">
                 <div class="label">Tickets</div>
-                <div class="value" style="white-space: pre-wrap;">${payload.ticketDetails}</div>
+                <div class="value" style="white-space: pre-wrap; font-weight: 500;">${payload.ticketDetails}</div>
               </div>
             </div>
             <div class="footer">
