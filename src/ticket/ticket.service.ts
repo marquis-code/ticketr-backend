@@ -99,18 +99,20 @@ export class TicketService {
   }
 
   async downloadTicketPdf(ticketId: string): Promise<Buffer> {
-    const ticket = await this.ticketModel.findById(ticketId).populate('eventId').populate('tierId').exec();
+    const ticket = await this.ticketModel.findById(ticketId).populate('eventId').populate('tierId').populate('tenantId').exec();
     if (!ticket) throw new NotFoundException('Ticket not found');
     
     const tier = ticket.tierId as any;
     const event = ticket.eventId as any;
+    const tenant = ticket.tenantId as any;
     
     if (!tier || !tier.templateImageUrl) {
       throw new BadRequestException('This ticket tier does not support custom PDF generation');
     }
 
+    const adminDomain = tenant && tenant.slug ? `admin-${tenant.slug}.ticketr.org` : 'admin.ticketr.org';
     // Pass the full URL to the QR code generator so it's scannable
-    const qrCodeUrl = `https://admin.ticketr.org/verify/${ticket.qrCodeHash}`;
+    const qrCodeUrl = `https://${adminDomain}/verify/${ticket.qrCodeHash}`;
 
     const ticketImageBuffer = await this.ticketGeneratorService.generateTicketImage({
       templateImageUrl: tier.templateImageUrl,

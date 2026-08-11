@@ -363,7 +363,8 @@ export class OrderService {
 
         issuedTickets.push(ticket);
 
-        const qrCodeUrl = `https://admin.ticketr.org/verify/${qrCodeHash}`;
+        const adminDomain = tenant && tenant.slug ? `admin-${tenant.slug}.ticketr.org` : 'admin.ticketr.org';
+        const qrCodeUrl = `https://${adminDomain}/verify/${qrCodeHash}`;
 
         let ticketImageBuffer: Buffer | undefined;
         let ticketPdfBuffer: Buffer | undefined;
