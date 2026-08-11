@@ -87,12 +87,12 @@ export class ResendService {
               </table>
 
               <div class="qr-container">
-                <img src="${qrDataUri}" alt="Ticket QR Code" />
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payload.qrCodeHash)}" alt="Ticket QR Code" />
                 <p style="font-size: 11px; color: #64748b; margin: 8px 0 0;">Present this QR Code at gate entry</p>
               </div>
             </div>
             <div class="footer">
-              Powered by <strong>Ticketr</strong> | ticketr.org
+              Powered by <strong>Ticketr</strong> | <a href="https://www.ticketr.org" style="color: #94a3b8; text-decoration: none;">www.ticketr.org</a>
             </div>
           </div>
         </body>
