@@ -243,8 +243,9 @@ export class OrderService {
       throw new BadRequestException('Order is not awaiting approval');
     }
 
-    order.status = OrderStatus.PAID;
-    order.paidAt = new Date();
+    // Store who approved it, but do NOT set status to PAID yet.
+    // verifyAndFulfillOrder will set PAID status AND handle ticket generation + email sending.
+    // If we set PAID here, verifyAndFulfillOrder sees it as already fulfilled and skips everything.
     order.approvedBy = adminUserId;
     await order.save();
 
