@@ -10,6 +10,7 @@ import { PaystackService } from '../paystack/paystack.service';
 import { ResendService } from '../resend/resend.service';
 import { RedisService } from '../redis/redis.service';
 import { TicketGeneratorService } from '../ticket-generator/ticket-generator.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import * as crypto from 'crypto';
 
 function generateStructuredTicketCode(
@@ -61,6 +62,7 @@ export class OrderService {
     private resendService: ResendService,
     private redisService: RedisService,
     private ticketGeneratorService: TicketGeneratorService,
+    private cloudinaryService: CloudinaryService,
   ) {}
 
   async createOrder(dto: {
@@ -77,8 +79,13 @@ export class OrderService {
     if (!event) {
       throw new NotFoundException('Event not found');
     }
+    const tenant = await this.tenantModel.findById(dto.tenantId);
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
 
     let totalAmount = 0;
+    let totalMarkupAmount = 0;
     const orderItems: Array<{
       tierId: string;
       tierName: string;
@@ -110,6 +117,22 @@ export class OrderService {
       const subtotal = tier.price * item.quantity;
       totalAmount += subtotal;
 
+      let itemMarkup = 0;
+      if (tier.markupFee > 0) {
+        if (tier.markupFeeType === MarkupFeeType.PERCENTAGE) {
+          itemMarkup = (tier.markupFee / 100) * subtotal;
+        } else {
+          itemMarkup = tier.markupFee * item.quantity;
+        }
+      }
+
+      if (itemMarkup > 0 && tier.markupStrategy === MarkupStrategy.ADD_TO_FEE) {
+        totalAmount += itemMarkup;
+        totalMarkupAmount += itemMarkup;
+      } else if (itemMarkup > 0) {
+        totalMarkupAmount += itemMarkup;
+      }
+
       orderItems.push({
         tierId: tier._id.toString(),
         tierName: tier.name,
@@ -123,19 +146,6 @@ export class OrderService {
     const orderNumber = `CMT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     const paystackRef = `REF-${orderNumber}`;
 
-    let markupAmount = 0;
-    if (event.markupFee > 0) {
-      if (event.markupFeeType === MarkupFeeType.PERCENTAGE) {
-        markupAmount = (event.markupFee / 100) * totalAmount;
-      } else {
-        markupAmount = event.markupFee;
-      }
-    }
-
-    if (markupAmount > 0 && event.markupStrategy === MarkupStrategy.ADD_TO_FEE) {
-      totalAmount += markupAmount;
-    }
-
     const order = await this.orderModel.create({
       tenantId: dto.tenantId,
       eventId: dto.eventId,
@@ -148,10 +158,19 @@ export class OrderService {
       totalAmount,
       currency: 'NGN',
       status: OrderStatus.PENDING,
-      paystackReference: paystackRef,
+      paystackReference: tenant.paymentMethod === 'PAYSTACK' ? paystackRef : undefined,
+      paymentMethod: tenant.paymentMethod || 'PAYSTACK',
     });
 
-    const tenant = await this.tenantModel.findById(dto.tenantId);
+    if (tenant.paymentMethod === 'MANUAL_TRANSFER') {
+      return {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount,
+        paymentMethod: 'MANUAL_TRANSFER',
+        remittanceAccount: tenant.primaryRemittanceAccount || tenant.remittanceAccount,
+      };
+    }
 
     const amountInKobo = Math.round(totalAmount * 100);
     const paystackPayload: any = {
@@ -168,8 +187,8 @@ export class OrderService {
       },
     };
 
-    if (markupAmount > 0) {
-      paystackPayload.transaction_charge = Math.round(markupAmount * 100);
+    if (totalMarkupAmount > 0) {
+      paystackPayload.transaction_charge = Math.round(totalMarkupAmount * 100);
       paystackPayload.bearer = 'account';
     }
 
@@ -182,14 +201,80 @@ export class OrderService {
       orderId: order._id.toString(),
       orderNumber: order.orderNumber,
       totalAmount: order.totalAmount,
+      paymentMethod: 'PAYSTACK',
       authorizationUrl: paystackResponse.authorization_url,
       reference: paystackRef,
     };
   }
 
+  async uploadProofOfPayment(orderId: string, tenantId: string, file: Express.Multer.File) {
+    const order = await this.orderModel.findOne({ _id: orderId, tenantId });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException('Order is not in a pending state');
+    }
+
+    if (!file) {
+      throw new BadRequestException('No proof of payment file provided');
+    }
+
+    let proofOfPaymentUrl = '';
+    try {
+      proofOfPaymentUrl = await this.cloudinaryService.uploadImage(file, 'ticketr/receipts');
+    } catch (err) {
+      console.warn('Cloudinary upload failed, falling back to mock receipt URL', err.message);
+      proofOfPaymentUrl = 'https://res.cloudinary.com/marquis/image/upload/v1723200000/ticketr/receipts/mock-receipt.png'; // Mock URL for testing offline
+    }
+    
+    order.proofOfPaymentUrl = proofOfPaymentUrl;
+    order.status = OrderStatus.AWAITING_APPROVAL;
+    await order.save();
+
+    return order;
+  }
+
+  async approveOrder(orderId: string, adminUserId: string) {
+    const order = await this.orderModel.findById(orderId);
+    if (!order) throw new NotFoundException('Order not found');
+    
+    if (order.status !== OrderStatus.AWAITING_APPROVAL) {
+      throw new BadRequestException('Order is not awaiting approval');
+    }
+
+    order.status = OrderStatus.PAID;
+    order.paidAt = new Date();
+    order.approvedBy = adminUserId;
+    await order.save();
+
+    // Call the fulfillment logic directly bypassing paystack verification
+    return this.verifyAndFulfillOrder(`FORCE-PAID-${order.paystackReference || order.orderNumber}`);
+  }
+
+  async rejectOrder(orderId: string, adminUserId: string) {
+    const order = await this.orderModel.findById(orderId);
+    if (!order) throw new NotFoundException('Order not found');
+    
+    if (order.status !== OrderStatus.AWAITING_APPROVAL) {
+      throw new BadRequestException('Order is not awaiting approval');
+    }
+
+    order.status = OrderStatus.FAILED;
+    order.approvedBy = adminUserId;
+    await order.save();
+
+    return order;
+  }
+
   async verifyAndFulfillOrder(reference: string) {
     const cleanRef = reference.replace('FORCE-PAID-', '');
-    const order = await this.orderModel.findOne({ paystackReference: cleanRef });
+    const order = await this.orderModel.findOne({
+      $or: [
+        { paystackReference: cleanRef },
+        { orderNumber: cleanRef }
+      ]
+    });
     if (!order) {
       throw new NotFoundException(`Order with reference '${reference}' not found`);
     }

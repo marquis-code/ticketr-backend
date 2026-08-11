@@ -10,6 +10,12 @@ export enum EventStatus {
   COMPLETED = 'COMPLETED',
 }
 
+export enum EventVisibility {
+  PUBLIC = 'PUBLIC',
+  UNIVERSITY_ONLY = 'UNIVERSITY_ONLY',
+  PRIVATE = 'PRIVATE',
+}
+
 export enum MarkupFeeType {
   FLAT = 'FLAT',
   PERCENTAGE = 'PERCENTAGE',
@@ -55,14 +61,11 @@ export class Event {
   @Prop({ type: String, enum: EventStatus, default: EventStatus.PUBLISHED, index: true })
   status: EventStatus;
 
-  @Prop({ default: 0 })
-  markupFee: number;
+  @Prop({ type: String, enum: EventVisibility, default: EventVisibility.PUBLIC, index: true })
+  visibility: EventVisibility;
 
-  @Prop({ type: String, enum: MarkupFeeType, default: MarkupFeeType.FLAT })
-  markupFeeType: MarkupFeeType;
-
-  @Prop({ type: String, enum: MarkupStrategy, default: MarkupStrategy.ADD_TO_FEE })
-  markupStrategy: MarkupStrategy;
+  @Prop({ required: true, default: 0 })
+  capacity: number; // For Waitlists and predictive models
 
   @Prop({ type: [String], default: [] })
   tags: string[];

@@ -10,6 +10,7 @@ import { Ticket, TicketSchema } from '../schemas/ticket.schema';
 import { PaystackModule } from '../paystack/paystack.module';
 import { ResendModule } from '../resend/resend.module';
 import { TicketGeneratorModule } from '../ticket-generator/ticket-generator.module';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { TicketGeneratorModule } from '../ticket-generator/ticket-generator.modu
     PaystackModule,
     ResendModule,
     TicketGeneratorModule,
+    CloudinaryModule,
   ],
   controllers: [OrderController],
   providers: [OrderService],

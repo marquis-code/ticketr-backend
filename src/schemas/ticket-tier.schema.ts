@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Schema as MongooseSchema } from 'mongoose';
+import { MarkupFeeType, MarkupStrategy } from './event.schema';
 
 export type TicketTierDocument = TicketTier & Document;
 
@@ -31,6 +32,15 @@ export class TicketTier {
 
   @Prop({ default: true })
   isActive: boolean;
+
+  @Prop({ default: 0 })
+  markupFee: number;
+
+  @Prop({ type: String, enum: MarkupFeeType, default: MarkupFeeType.FLAT })
+  markupFeeType: MarkupFeeType;
+
+  @Prop({ type: String, enum: MarkupStrategy, default: MarkupStrategy.ADD_TO_FEE })
+  markupStrategy: MarkupStrategy;
 }
 
 export const TicketTierSchema = SchemaFactory.createForClass(TicketTier);

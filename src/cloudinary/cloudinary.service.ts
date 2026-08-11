@@ -18,7 +18,7 @@ export class CloudinaryService {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder,
-          format: 'webp',
+          resource_type: 'auto',
           quality: 'auto',
         },
         (error: UploadApiErrorResponse, result: UploadApiResponse) => {

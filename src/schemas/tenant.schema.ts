@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Schema as MongooseSchema } from 'mongoose';
 
 export type TenantDocument = Tenant & Document;
 
@@ -9,8 +9,16 @@ export enum TenantStatus {
   PENDING = 'PENDING',
 }
 
+export enum PaymentMethod {
+  PAYSTACK = 'PAYSTACK',
+  MANUAL_TRANSFER = 'MANUAL_TRANSFER',
+}
+
 @Schema({ timestamps: true })
 export class Tenant {
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'University', index: true })
+  universityId?: string;
+
   @Prop({ required: true, trim: true })
   name: string;
 
@@ -38,11 +46,22 @@ export class Tenant {
   @Prop({ type: String, enum: TenantStatus, default: TenantStatus.ACTIVE })
   status: TenantStatus;
 
+  @Prop({ type: String, enum: PaymentMethod, default: PaymentMethod.PAYSTACK })
+  paymentMethod: PaymentMethod;
+
   @Prop()
   paystackSubaccountCode?: string; // For split payouts to tenants
 
   @Prop({ type: Object })
   primaryRemittanceAccount?: {
+    bankName?: string;
+    bankCode?: string;
+    accountNumber?: string;
+    accountName?: string;
+  };
+
+  @Prop({ type: Object })
+  remittanceAccount?: {
     bankName?: string;
     bankCode?: string;
     accountNumber?: string;

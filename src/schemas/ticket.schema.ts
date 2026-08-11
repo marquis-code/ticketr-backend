@@ -41,6 +41,12 @@ export class Ticket {
   @Prop({ type: String, enum: TicketStatus, default: TicketStatus.ISSUED, index: true })
   status: TicketStatus;
 
+  @Prop({ default: true })
+  isResaleable: boolean;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', index: true })
+  currentOwnerId?: string; // Tracks transfers/resales
+
   @Prop()
   checkedInAt?: Date;
 

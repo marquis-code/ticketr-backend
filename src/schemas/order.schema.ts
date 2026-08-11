@@ -5,6 +5,7 @@ export type OrderDocument = Order & Document;
 
 export enum OrderStatus {
   PENDING = 'PENDING',
+  AWAITING_APPROVAL = 'AWAITING_APPROVAL',
   PAID = 'PAID',
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
@@ -73,6 +74,15 @@ export class Order {
 
   @Prop()
   paidAt?: Date;
+
+  @Prop()
+  proofOfPaymentUrl?: string;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
+  approvedBy?: string;
+
+  @Prop({ default: 'PAYSTACK' })
+  paymentMethod: string;
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);

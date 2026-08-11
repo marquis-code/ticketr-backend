@@ -19,10 +19,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.client = new Redis({
         host,
         port,
+        username: password ? 'default' : undefined,
         password: password || undefined,
         connectTimeout: 3000,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
+        enableReadyCheck: false,
         retryStrategy: (times) => {
           if (times > 2) {
             return null; // Stop retrying after 2 attempts
@@ -41,8 +43,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       });
 
       this.client.on('error', (err) => {
+        // Suppress RESP3 HELLO negotiation errors — ioredis falls back to RESP2 automatically
+        if (err?.message?.includes('NOAUTH HELLO') || err?.message?.includes('HELLO')) {
+          return; // Silently ignore — this is expected with Redis Cloud
+        }
         this.isConnected = false;
-        // Suppress unhandled error log floods
       });
     } catch (err) {
       this.logger.warn(`Redis initialization notice: ${err.message}`);

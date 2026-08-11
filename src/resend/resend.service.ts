@@ -231,4 +231,30 @@ export class ResendService {
       return { success: false, error: error.message };
     }
   }
+
+  async sendEmail(toEmail: string, subject: string, htmlContent: string) {
+    if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
+      this.logger.log(`[MOCK EMAIL SENT] Email sent to ${toEmail} with subject: ${subject}`);
+      return { success: true, mock: true };
+    }
+
+    try {
+      const { error } = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: toEmail,
+        subject,
+        html: htmlContent,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Generic email dispatched to ${toEmail}`);
+      return { success: true };
+    } catch (error) {
+      this.logger.error(`Failed to send generic email to ${toEmail}`, error);
+      return { success: false, error: error.message };
+    }
+  }
 }

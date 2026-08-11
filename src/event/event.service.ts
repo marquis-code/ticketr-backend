@@ -75,6 +75,9 @@ export class EventService {
         price: t.price,
         capacity: t.capacity,
         maxPerPurchase: t.maxPerPurchase || 5,
+        markupFee: t['markupFee'] || 0,
+        markupFeeType: t['markupFeeType'] || MarkupFeeType.FLAT,
+        markupStrategy: t['markupStrategy'] || MarkupStrategy.ADD_TO_FEE,
       }));
       await this.ticketTierModel.insertMany(tierDocs);
     }
@@ -164,6 +167,8 @@ export class EventService {
         logoUrl: tenant.logoUrl,
         primaryColor: tenant.primaryColor,
         secondaryColor: tenant.secondaryColor,
+        paymentMethod: tenant.paymentMethod || 'PAYSTACK',
+        primaryRemittanceAccount: tenant.primaryRemittanceAccount || tenant.remittanceAccount,
       },
       event: {
         ...event.toObject(),
@@ -275,6 +280,9 @@ export class EventService {
       price: body.price,
       capacity: body.capacity,
       maxPerPurchase: body.maxPerPurchase || 5,
+      markupFee: body.markupFee || 0,
+      markupFeeType: body.markupFeeType || MarkupFeeType.FLAT,
+      markupStrategy: body.markupStrategy || MarkupStrategy.ADD_TO_FEE,
     });
     return newTier;
   }
@@ -289,6 +297,9 @@ export class EventService {
     if (body.price !== undefined) updateData.price = body.price;
     if (body.capacity !== undefined) updateData.capacity = body.capacity;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
+    if (body.markupFee !== undefined) updateData.markupFee = body.markupFee;
+    if (body.markupFeeType) updateData.markupFeeType = body.markupFeeType;
+    if (body.markupStrategy) updateData.markupStrategy = body.markupStrategy;
 
     const tier = await this.ticketTierModel.findOneAndUpdate(
       { _id: tierId, eventId },
@@ -324,23 +335,6 @@ export class EventService {
     }
     await this.ticketTierModel.deleteMany({ eventId });
     return { success: true };
-  }
-
-  async updateEventMarkup(
-    eventId: string,
-    markupFee: number,
-    markupFeeType: MarkupFeeType,
-    markupStrategy: MarkupStrategy,
-  ) {
-    const event = await this.eventModel.findByIdAndUpdate(
-      eventId,
-      { markupFee, markupFeeType, markupStrategy },
-      { new: true },
-    );
-    if (!event) {
-      throw new NotFoundException('Event not found');
-    }
-    return event;
   }
 
   async getAllEventsForSuperAdmin() {

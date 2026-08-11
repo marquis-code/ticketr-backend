@@ -1,4 +1,5 @@
-import { Controller, Post, Get, Body, Param, Query, Headers, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, Headers, Request, BadRequestException, Patch, UploadedFile, UseInterceptors, UseGuards } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { OrderService } from './order.service';
 import { PaystackService } from '../paystack/paystack.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -68,6 +69,38 @@ export class OrderController {
   @Get('superadmin/all')
   async getAllOrdersSuperAdmin() {
     return this.orderService.getAllOrdersSuperAdmin();
+  }
+
+  @Post(':id/upload-proof')
+  @UseInterceptors(FileInterceptor('receipt'))
+  async uploadProofOfPayment(
+    @Param('id') orderId: string,
+    @Body('tenantId') tenantId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!tenantId) throw new BadRequestException('tenantId is required');
+    if (!file) throw new BadRequestException('Receipt file is required');
+    try {
+      return await this.orderService.uploadProofOfPayment(orderId, tenantId, file);
+    } catch (error) {
+      console.error("Upload proof error:", error);
+      if (error.response) throw error;
+      throw new BadRequestException(error.message || 'Error uploading proof');
+    }
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
+  @Patch('admin/:id/approve')
+  async approveOrder(@Request() req, @Param('id') orderId: string) {
+    return this.orderService.approveOrder(orderId, req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
+  @Patch('admin/:id/reject')
+  async rejectOrder(@Request() req, @Param('id') orderId: string) {
+    return this.orderService.rejectOrder(orderId, req.user.userId);
   }
 
   @Get(':id')

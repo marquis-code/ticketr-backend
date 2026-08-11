@@ -27,8 +27,23 @@ export class User {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Tenant', index: true })
   tenantId?: string; // Null for SUPER_ADMIN or global CUSTOMER
 
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'University', index: true })
+  universityId?: string;
+
+  @Prop({ type: [String], default: [] })
+  interests: string[];
+
+  @Prop({ type: [{ type: MongooseSchema.Types.ObjectId, ref: 'User' }], default: [] })
+  following: string[];
+
   @Prop({ default: true })
   isActive: boolean;
+
+  @Prop({ type: [String], default: [] })
+  fcmTokens: string[];
+
+  @Prop({ type: Object, default: { emailNotifications: true, pushNotifications: true } })
+  preferences: { emailNotifications: boolean; pushNotifications: boolean };
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
