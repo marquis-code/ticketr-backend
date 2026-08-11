@@ -13,8 +13,10 @@ export class TicketController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER, UserRole.STAFF, UserRole.SUPER_ADMIN)
   @Post('verify-scan')
-  async verifyScan(@Request() req, @Body('qrCodeHash') qrCodeHash: string) {
-    return this.ticketService.verifyScan(qrCodeHash, req.user.userId);
+  async verifyScan(@Request() req, @Body('qrCodeHash') qrCodeHash: string, @Body('commit') commit?: boolean) {
+    // If commit is not provided, default to true for backward compatibility
+    const shouldCommit = commit !== undefined ? commit : true;
+    return this.ticketService.verifyScan(qrCodeHash, req.user.userId, shouldCommit);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

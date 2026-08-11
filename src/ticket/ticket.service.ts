@@ -15,7 +15,7 @@ export class TicketService {
     private ticketGeneratorService: TicketGeneratorService,
   ) {}
 
-  async verifyScan(inputToken: string, scannedByUserId: string) {
+  async verifyScan(inputToken: string, scannedByUserId: string, commit: boolean = true) {
     let token = inputToken.trim();
     // Extract hash if the input is a full verification URL
     if (token.includes('/verify/')) {
@@ -64,15 +64,17 @@ export class TicketService {
       };
     }
 
-    // Mark as checked in
-    ticket.status = TicketStatus.CHECKED_IN;
-    ticket.checkedInAt = new Date();
-    ticket.checkedInBy = scannedByUserId;
-    await ticket.save();
+    if (commit) {
+      // Mark as checked in
+      ticket.status = TicketStatus.CHECKED_IN;
+      ticket.checkedInAt = new Date();
+      ticket.checkedInBy = scannedByUserId;
+      await ticket.save();
 
-    // Cache ticket scan state in Redis under both keys for instant subsequent checks
-    await this.redisService.cacheTicketScan(ticket.qrCodeHash, ticket.toObject());
-    await this.redisService.cacheTicketScan(ticket.ticketNumber, ticket.toObject());
+      // Cache ticket scan state in Redis under both keys for instant subsequent checks
+      await this.redisService.cacheTicketScan(ticket.qrCodeHash, ticket.toObject());
+      await this.redisService.cacheTicketScan(ticket.ticketNumber, ticket.toObject());
+    }
 
     return {
       valid: true,
@@ -82,7 +84,7 @@ export class TicketService {
       tierName: (ticket.tierId as any)?.name || 'Standard Tier',
       eventName: (ticket.eventId as any)?.title || 'Event',
       checkedInAt: ticket.checkedInAt,
-      message: '✅ Ticket check-in successful!',
+      message: commit ? '✅ Ticket check-in successful!' : 'Ticket is valid and ready to be checked in.',
     };
   }
 
