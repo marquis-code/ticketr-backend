@@ -15,9 +15,15 @@ export class TicketService {
     private ticketGeneratorService: TicketGeneratorService,
   ) {}
 
-  async verifyScan(qrCodeHash: string, scannedByUserId: string) {
+  async verifyScan(inputToken: string, scannedByUserId: string) {
+    let token = inputToken.trim();
+    // Extract hash if the input is a full verification URL
+    if (token.includes('/verify/')) {
+      token = token.split('/verify/').pop() || token;
+    }
+
     // Check Redis scan cache first for instant validation
-    const cachedScan = await this.redisService.getCachedTicketScan(qrCodeHash);
+    const cachedScan = await this.redisService.getCachedTicketScan(token);
     if (cachedScan && cachedScan.status === TicketStatus.CHECKED_IN) {
       return {
         valid: false,
@@ -29,9 +35,16 @@ export class TicketService {
       };
     }
 
-    const ticket = await this.ticketModel.findOne({ qrCodeHash }).populate('eventId').populate('tierId').exec();
+    // Lookup by either exact QR Code Hash or Case-Insensitive Ticket Number
+    const ticket = await this.ticketModel.findOne({
+      $or: [
+        { qrCodeHash: token },
+        { ticketNumber: new RegExp('^' + token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') }
+      ]
+    }).populate('eventId').populate('tierId').exec();
+
     if (!ticket) {
-      throw new NotFoundException('Invalid ticket QR code');
+      throw new NotFoundException('Invalid ticket QR code or ticket number');
     }
 
     if (ticket.status === TicketStatus.CANCELLED) {
@@ -39,7 +52,8 @@ export class TicketService {
     }
 
     if (ticket.status === TicketStatus.CHECKED_IN) {
-      await this.redisService.cacheTicketScan(qrCodeHash, ticket.toObject());
+      await this.redisService.cacheTicketScan(ticket.qrCodeHash, ticket.toObject());
+      await this.redisService.cacheTicketScan(ticket.ticketNumber, ticket.toObject());
       return {
         valid: false,
         alreadyCheckedIn: true,
@@ -56,8 +70,9 @@ export class TicketService {
     ticket.checkedInBy = scannedByUserId;
     await ticket.save();
 
-    // Cache ticket scan state in Redis
-    await this.redisService.cacheTicketScan(qrCodeHash, ticket.toObject());
+    // Cache ticket scan state in Redis under both keys for instant subsequent checks
+    await this.redisService.cacheTicketScan(ticket.qrCodeHash, ticket.toObject());
+    await this.redisService.cacheTicketScan(ticket.ticketNumber, ticket.toObject());
 
     return {
       valid: true,
