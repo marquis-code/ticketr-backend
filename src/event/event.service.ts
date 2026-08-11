@@ -195,7 +195,7 @@ export class EventService {
       events.map(async (ev) => {
         const tiers = await this.ticketTierModel.find({ eventId: ev._id.toString() }).exec();
         const totalCapacity = tiers.reduce((sum, t) => sum + t.capacity, 0);
-        const totalSold = tiers.reduce((sum, t) => sum + t.soldCount, 0);
+        const totalSold = await this.ticketModel.countDocuments({ eventId: ev._id.toString() });
         return {
           ...ev.toObject(),
           totalCapacity,
