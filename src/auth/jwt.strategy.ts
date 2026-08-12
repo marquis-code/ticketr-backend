@@ -29,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: user.email,
       name: user.name,
       role: user.role,
-      tenantId: user.tenantId ? user.tenantId.toString() : undefined,
+      tenantId: payload.tenantId || (user.tenantId ? user.tenantId.toString() : undefined),
     };
   }
 }

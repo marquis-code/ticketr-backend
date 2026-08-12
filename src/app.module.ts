@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -13,6 +14,7 @@ import { TicketModule } from './ticket/ticket.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { RedisModule } from './redis/redis.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { AuditModule } from './audit/audit.module';
 import { BullModule } from '@nestjs/bullmq';
 import { SeedService } from './seed.service';
 import { Tenant, TenantSchema } from './schemas/tenant.schema';
@@ -23,6 +25,7 @@ import { University, UniversitySchema } from './schemas/university.schema';
 import { ResaleListing, ResaleListingSchema } from './schemas/resale-listing.schema';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuditInterceptor } from './audit/audit.interceptor';
 
 @Module({
   imports: [
@@ -87,8 +90,16 @@ import { AppService } from './app.service';
     OrderModule,
     TicketModule,
     AnalyticsModule,
+    AuditModule,
   ],
   controllers: [AppController],
-  providers: [AppService, SeedService],
+  providers: [
+    AppService,
+    SeedService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
+    },
+  ],
 })
 export class AppModule {}

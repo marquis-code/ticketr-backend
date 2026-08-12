@@ -44,6 +44,18 @@ export class User {
 
   @Prop({ type: Object, default: { emailNotifications: true, pushNotifications: true } })
   preferences: { emailNotifications: boolean; pushNotifications: boolean };
+
+  @Prop()
+  resetPasswordToken?: string;
+
+  @Prop()
+  resetPasswordExpires?: Date;
+
+  @Prop()
+  otpSecret?: string; // We can store the 6-digit OTP here
+
+  @Prop()
+  otpExpires?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -58,6 +58,12 @@ export class Event {
   @Prop({ required: true })
   endDate: Date;
 
+  @Prop()
+  checkInStart?: Date;
+
+  @Prop()
+  checkInEnd?: Date;
+
   @Prop({ type: String, enum: EventStatus, default: EventStatus.PUBLISHED, index: true })
   status: EventStatus;
 
@@ -72,6 +78,9 @@ export class Event {
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
   createdBy: string;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
+  updatedBy?: string;
 }
 
 export const EventSchema = SchemaFactory.createForClass(Event);

@@ -15,6 +15,11 @@ export class AnalyticsService {
     @InjectModel(Tenant.name) private tenantModel: Model<TenantDocument>,
   ) {}
 
+  async resolveTenantIdFromSubdomain(subdomain: string): Promise<string | null> {
+    const tenant = await this.tenantModel.findOne({ subdomain }).exec();
+    return tenant ? tenant._id.toString() : null;
+  }
+
   async getTenantAnalytics(tenantId: string) {
     const paidOrders = await this.orderModel.find({ tenantId, status: OrderStatus.PAID }).exec();
     const totalRevenue = paidOrders.reduce((sum, o) => sum + o.totalAmount, 0);
@@ -29,6 +34,30 @@ export class AnalyticsService {
       .limit(5)
       .exec();
 
+    // Chart Data: Sales Over Time (Revenue grouped by day)
+    const salesMap: Record<string, number> = {};
+    paidOrders.forEach(o => {
+      // Get YYYY-MM-DD
+      const dateStr = new Date((o as any).createdAt).toISOString().split('T')[0];
+      salesMap[dateStr] = (salesMap[dateStr] || 0) + o.totalAmount;
+    });
+    
+    // Sort dates
+    const salesOverTime = Object.keys(salesMap)
+      .sort()
+      .map(date => ({ date, revenue: salesMap[date] }));
+
+    // Chart Data: Tickets by Event
+    const events = await this.eventModel.find({ tenantId }).exec();
+    const ticketsByEvent: { eventName: string; ticketsSold: number }[] = [];
+    for (const event of events) {
+      const ticketsSold = await this.ticketModel.countDocuments({ eventId: event._id.toString() });
+      if (ticketsSold > 0) {
+        ticketsByEvent.push({ eventName: event.title, ticketsSold });
+      }
+    }
+    ticketsByEvent.sort((a, b) => b.ticketsSold - a.ticketsSold);
+
     return {
       totalRevenue,
       totalTicketsSold,
@@ -36,6 +65,8 @@ export class AnalyticsService {
       totalEvents,
       checkInRate: totalTicketsSold > 0 ? Math.round((checkedInTickets / totalTicketsSold) * 100) : 0,
       recentOrders,
+      salesOverTime,
+      ticketsByEvent,
     };
   }
 

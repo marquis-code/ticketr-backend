@@ -81,8 +81,14 @@ export class Order {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
   approvedBy?: string;
 
+  @Prop()
+  forceApproveReason?: string;
+
   @Prop({ default: 'PAYSTACK' })
   paymentMethod: string;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
+  updatedBy?: string;
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);

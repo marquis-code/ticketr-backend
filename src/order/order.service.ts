@@ -235,6 +235,49 @@ export class OrderService {
     return order;
   }
 
+  async forceApproveOrder(orderId: string, adminUserId: string, reason?: string) {
+    const order = await this.orderModel.findById(orderId);
+    if (!order) throw new NotFoundException('Order not found');
+    
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException('Order is not in pending state');
+    }
+
+    order.approvedBy = adminUserId;
+    if (reason) order.forceApproveReason = reason;
+    await order.save();
+
+    return this.verifyAndFulfillOrder(`FORCE-PAID-${order.paystackReference || order.orderNumber}`);
+  }
+
+  async sendPaymentReminder(orderId: string, customSubject?: string, customMessage?: string) {
+    const order = await this.orderModel.findById(orderId).populate('eventId');
+    if (!order) throw new NotFoundException('Order not found');
+    
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException('Order is not in pending state');
+    }
+
+    const event = order.eventId as any as EventDocument;
+    const tenant = await this.tenantModel.findById(order.tenantId);
+    
+    const domain = tenant && tenant.slug ? `${tenant.slug}.ticketr.org` : 'ticketr.org';
+    const eventSlug = event && event.slug ? event.slug : '';
+    const checkoutUrl = `https://${domain}/${eventSlug}`;
+
+    await this.resendService.sendPaymentReminder({
+      toEmail: order.customerEmail,
+      customerName: order.customerName,
+      eventName: event ? event.title : 'Ticketr Event',
+      orderNumber: order.orderNumber,
+      checkoutUrl,
+      customSubject,
+      customMessage,
+    });
+
+    return { success: true, message: 'Reminder sent' };
+  }
+
   async approveOrder(orderId: string, adminUserId: string) {
     const order = await this.orderModel.findById(orderId);
     if (!order) throw new NotFoundException('Order not found');

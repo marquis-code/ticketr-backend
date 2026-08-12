@@ -47,6 +47,34 @@ export class TicketService {
       throw new NotFoundException('Invalid ticket QR code or ticket number');
     }
 
+    const event = ticket.eventId as any;
+    if (event) {
+      const now = new Date();
+      if (event.startDate && now < new Date(event.startDate)) {
+        return {
+          valid: false,
+          alreadyCheckedIn: false,
+          notStarted: true,
+          eventTitle: event.title,
+          message: `🚫 Event hasn't started yet!`,
+        };
+      }
+      if (event.checkInStart && now < new Date(event.checkInStart)) {
+        return {
+          valid: false,
+          alreadyCheckedIn: false,
+          message: `🚫 Check-in for this event has not started yet. Starts at ${new Date(event.checkInStart).toLocaleString()}`,
+        };
+      }
+      if (event.checkInEnd && now > new Date(event.checkInEnd)) {
+        return {
+          valid: false,
+          alreadyCheckedIn: false,
+          message: `🚫 Check-in for this event has ended. Ended at ${new Date(event.checkInEnd).toLocaleString()}`,
+        };
+      }
+    }
+
     if (ticket.status === TicketStatus.CANCELLED) {
       throw new BadRequestException('This ticket has been cancelled');
     }

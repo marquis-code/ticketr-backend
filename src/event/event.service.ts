@@ -28,6 +28,8 @@ export class EventService {
       isVirtual?: boolean;
       startDate: Date;
       endDate: Date;
+      checkInStart?: Date;
+      checkInEnd?: Date;
       tags?: string[];
       carouselImages?: string[];
       tiers: Array<{
@@ -60,6 +62,8 @@ export class EventService {
       isVirtual: dto.isVirtual || false,
       startDate: dto.startDate,
       endDate: dto.endDate,
+      checkInStart: dto.checkInStart,
+      checkInEnd: dto.checkInEnd,
       tags: dto.tags || [],
       status: EventStatus.DRAFT,
       bannerUrl,
@@ -258,6 +262,8 @@ export class EventService {
     if (body.title) updateData.title = body.title;
     if (body.description) updateData.description = body.description;
     if (body.location) updateData.location = body.location;
+    if (body.checkInStart) updateData.checkInStart = body.checkInStart;
+    if (body.checkInEnd) updateData.checkInEnd = body.checkInEnd;
     if (body.carouselImages) updateData.carouselImages = body.carouselImages;
 
     const event = await this.eventModel.findOneAndUpdate(

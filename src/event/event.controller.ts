@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { EventService } from './event.service';
+import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -22,7 +23,10 @@ import { EventStatus } from '../schemas/event.schema';
 
 @Controller('events')
 export class EventController {
-  constructor(private eventService: EventService) {}
+  constructor(
+    private eventService: EventService,
+    private auditService: AuditService
+  ) {}
 
   @Get('public/all')
   async getAllPublicEvents() {
@@ -73,7 +77,18 @@ export class EventController {
     if (!req.user.tenantId) {
       throw new BadRequestException('User must belong to an organization');
     }
-    return this.eventService.updateEventStatus(eventId, req.user.tenantId, status);
+    const result = await this.eventService.updateEventStatus(eventId, req.user.tenantId, status);
+    
+    await this.auditService.logAction({
+      action: 'EVENT_STATUS_UPDATED',
+      entity: 'Event',
+      entityId: eventId,
+      userId: req.user.userId,
+      tenantId: req.user.tenantId,
+      details: { status }
+    });
+
+    return result;
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -102,7 +117,18 @@ export class EventController {
     if (!req.user.tenantId) {
       throw new BadRequestException('User must belong to an organization');
     }
-    return this.eventService.updateEventDetails(eventId, req.user.tenantId, body);
+    const result = await this.eventService.updateEventDetails(eventId, req.user.tenantId, body);
+    
+    await this.auditService.logAction({
+      action: 'EVENT_DETAILS_UPDATED',
+      entity: 'Event',
+      entityId: eventId,
+      userId: req.user.userId,
+      tenantId: req.user.tenantId,
+      details: body
+    });
+
+    return result;
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -197,6 +223,8 @@ export class EventController {
         isVirtual: body.isVirtual === 'true' || body.isVirtual === true,
         startDate: new Date(body.startDate),
         endDate: new Date(body.endDate),
+        checkInStart: body.checkInStart ? new Date(body.checkInStart) : undefined,
+        checkInEnd: body.checkInEnd ? new Date(body.checkInEnd) : undefined,
         tags: body.tags ? (typeof body.tags === 'string' ? body.tags.split(',') : body.tags) : [],
         carouselImages: body.carouselImages ? (typeof body.carouselImages === 'string' ? JSON.parse(body.carouselImages) : body.carouselImages) : [],
         tiers: parsedTiers,

@@ -2,6 +2,7 @@ import { Controller, Post, Get, Body, Param, Query, Headers, Request, BadRequest
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrderService } from './order.service';
 import { PaystackService } from '../paystack/paystack.service';
+import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -12,6 +13,7 @@ export class OrderController {
   constructor(
     private orderService: OrderService,
     private paystackService: PaystackService,
+    private auditService: AuditService
   ) {}
 
   @Post()
@@ -91,16 +93,66 @@ export class OrderController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
+  @Patch('admin/:id/force-approve')
+  async forceApproveOrder(@Request() req, @Param('id') orderId: string, @Body() body: { reason: string }) {
+    if (!body?.reason) {
+      throw new BadRequestException('Reason is required to manually mark an order as paid');
+    }
+    const result = await this.orderService.forceApproveOrder(orderId, req.user.userId, body.reason);
+    await this.auditService.logAction({
+      action: 'ORDER_FORCE_APPROVED',
+      entity: 'Order',
+      entityId: orderId,
+      userId: req.user.userId,
+      tenantId: req.user.tenantId,
+      details: { reason: body.reason }
+    });
+    return result;
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
+  @Post('admin/:id/remind')
+  async remindOrder(@Request() req, @Param('id') orderId: string, @Body() body: { customSubject?: string; customMessage?: string }) {
+    const result = await this.orderService.sendPaymentReminder(orderId, body?.customSubject, body?.customMessage);
+    await this.auditService.logAction({
+      action: 'ORDER_REMINDER_SENT',
+      entity: 'Order',
+      entityId: orderId,
+      userId: req.user.userId,
+      tenantId: req.user.tenantId,
+    });
+    return result;
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
   @Patch('admin/:id/approve')
   async approveOrder(@Request() req, @Param('id') orderId: string) {
-    return this.orderService.approveOrder(orderId, req.user.userId);
+    const result = await this.orderService.approveOrder(orderId, req.user.userId);
+    await this.auditService.logAction({
+      action: 'ORDER_APPROVED',
+      entity: 'Order',
+      entityId: orderId,
+      userId: req.user.userId,
+      tenantId: req.user.tenantId,
+    });
+    return result;
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
   @Patch('admin/:id/reject')
   async rejectOrder(@Request() req, @Param('id') orderId: string) {
-    return this.orderService.rejectOrder(orderId, req.user.userId);
+    const result = await this.orderService.rejectOrder(orderId, req.user.userId);
+    await this.auditService.logAction({
+      action: 'ORDER_REJECTED',
+      entity: 'Order',
+      entityId: orderId,
+      userId: req.user.userId,
+      tenantId: req.user.tenantId,
+    });
+    return result;
   }
 
   @Get(':id')

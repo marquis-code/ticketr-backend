@@ -9,6 +9,7 @@ import { Tenant, TenantSchema } from '../schemas/tenant.schema';
 import { Ticket, TicketSchema } from '../schemas/ticket.schema';
 import { PaystackModule } from '../paystack/paystack.module';
 import { ResendModule } from '../resend/resend.module';
+import { AuditModule } from '../audit/audit.module';
 import { TicketGeneratorModule } from '../ticket-generator/ticket-generator.module';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 
@@ -25,6 +26,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
     ResendModule,
     TicketGeneratorModule,
     CloudinaryModule,
+    AuditModule,
   ],
   controllers: [OrderController],
   providers: [OrderService],

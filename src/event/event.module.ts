@@ -7,6 +7,7 @@ import { TicketTier, TicketTierSchema } from '../schemas/ticket-tier.schema';
 import { Tenant, TenantSchema } from '../schemas/tenant.schema';
 import { Ticket, TicketSchema } from '../schemas/ticket.schema';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
       { name: Ticket.name, schema: TicketSchema },
     ]),
     CloudinaryModule,
+    AuditModule,
   ],
   controllers: [EventController],
   providers: [EventService],

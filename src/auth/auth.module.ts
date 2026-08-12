@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Tenant, TenantSchema } from '../schemas/tenant.schema';
+import { ResendModule } from '../resend/resend.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { Tenant, TenantSchema } from '../schemas/tenant.schema';
       { name: User.name, schema: UserSchema },
       { name: Tenant.name, schema: TenantSchema },
     ]),
+    ResendModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

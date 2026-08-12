@@ -229,6 +229,167 @@ export class ResendService {
     }
   }
 
+  async sendPaymentReminder(payload: {
+    toEmail: string;
+    customerName: string;
+    eventName: string;
+    orderNumber: string;
+    checkoutUrl: string;
+    customSubject?: string;
+    customMessage?: string;
+  }) {
+    try {
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; color: #111827; margin: 0; padding: 40px 20px; }
+            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #e5e7eb; }
+            .header { background: #ffffff; padding: 40px 30px 20px; text-align: center; border-bottom: 1px solid #f3f4f6; }
+            .header img { height: 48px; margin-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 24px; font-weight: 800; color: #111827; }
+            .header p { margin: 8px 0 0; color: #6b7280; font-size: 15px; }
+            .body { padding: 30px; text-align: center; }
+            .greeting { font-size: 16px; margin-bottom: 24px; color: #374151; line-height: 1.5; }
+            .cta-button { display: inline-block; background-color: #059669; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 600; font-size: 16px; margin: 20px 0; }
+            .footer { text-align: center; padding: 24px; font-size: 13px; color: #9ca3af; background: #f9fafb; }
+            .footer a { color: #0F4D3F; text-decoration: none; font-weight: 600; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <img src="https://res.cloudinary.com/marquis/image/upload/v1786452024/ticketr_djxoz9.png" alt="Ticketr Logo" />
+              <h1>Action Required</h1>
+              <p>Complete Your Booking</p>
+            </div>
+            <div class="body">
+              <div class="greeting">
+                ${payload.customMessage 
+                  ? payload.customMessage 
+                  : `Hi <strong>${payload.customerName}</strong>,<br/><br/>We noticed you started booking a ticket for <strong>${payload.eventName}</strong> but didn't finish. Secure your spot now before tickets run out!`}
+              </div>
+              <a href="${payload.checkoutUrl}" class="cta-button">Complete Payment</a>
+              <p style="margin-top: 20px; font-size: 14px; color: #6b7280;">Order No: ${payload.orderNumber}</p>
+            </div>
+            <div class="footer">
+              Powered by <strong>Ticketr</strong> | <a href="https://www.ticketr.org">www.ticketr.org</a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
+        this.logger.log(`[MOCK EMAIL SENT] Reminder sent to ${payload.toEmail} for order ${payload.orderNumber}`);
+        return { success: true, mock: true };
+      }
+
+      const { error } = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: payload.toEmail,
+        subject: payload.customSubject || `Complete your booking for ${payload.eventName}`,
+        html: htmlContent,
+      });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Payment reminder dispatched to ${payload.toEmail}`);
+      return { success: true };
+    } catch (error) {
+      this.logger.error(`Failed to send reminder to ${payload.toEmail}`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async sendLoginOTPEmail(toEmail: string, otp: string, customerName: string) {
+    try {
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #111827; padding: 40px 20px; }
+            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; padding: 30px; text-align: center; }
+            .otp-box { background: #f8fafc; border: 1px dashed #cbd5e1; font-size: 32px; font-weight: 800; letter-spacing: 5px; padding: 20px; border-radius: 12px; margin: 20px 0; color: #0F4D3F; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h2>Sign in to Ticketr Admin</h2>
+            <p>Hi <strong>${customerName}</strong>, use the following One-Time Password (OTP) to complete your login. It expires in 10 minutes.</p>
+            <div class="otp-box">${otp}</div>
+            <p>If you did not request this, please ignore this email.</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
+        this.logger.log(`[MOCK EMAIL SENT] OTP sent to ${toEmail}: ${otp}`);
+        return { success: true, mock: true };
+      }
+
+      const { error } = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: toEmail,
+        subject: `Your Ticketr Login OTP: ${otp}`,
+        html: htmlContent,
+      });
+      if (error) throw new Error(error.message);
+      return { success: true };
+    } catch (error) {
+      this.logger.error(`Failed to send OTP to ${toEmail}`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async sendPasswordResetEmail(toEmail: string, resetLink: string, customerName: string) {
+    try {
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #111827; padding: 40px 20px; }
+            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; padding: 30px; text-align: center; }
+            .cta-button { display: inline-block; background-color: #0F4D3F; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 600; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h2>Reset Your Password</h2>
+            <p>Hi <strong>${customerName}</strong>, we received a request to reset your Ticketr password.</p>
+            <p>Click the button below to choose a new password. This link expires in 1 hour.</p>
+            <a href="${resetLink}" class="cta-button">Reset Password</a>
+            <p style="font-size: 12px; color: #6b7280; margin-top: 20px;">If you didn't request this, ignore this email.</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
+        this.logger.log(`[MOCK EMAIL SENT] Reset link sent to ${toEmail}: ${resetLink}`);
+        return { success: true, mock: true };
+      }
+
+      const { error } = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: toEmail,
+        subject: `Reset your Ticketr Password`,
+        html: htmlContent,
+      });
+      if (error) throw new Error(error.message);
+      return { success: true };
+    } catch (error) {
+      this.logger.error(`Failed to send password reset to ${toEmail}`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
   async sendEmail(toEmail: string, subject: string, htmlContent: string) {
     if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
       this.logger.log(`[MOCK EMAIL SENT] Email sent to ${toEmail} with subject: ${subject}`);
