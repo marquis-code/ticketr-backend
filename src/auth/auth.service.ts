@@ -25,7 +25,8 @@ export class AuthService {
     tenantSlug?: string;
     organizationName?: string;
   }) {
-    const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    const email = dto.email.trim().toLowerCase();
+    const existing = await this.userModel.findOne({ email });
     if (existing) {
       throw new BadRequestException('User with this email already exists');
     }
@@ -38,7 +39,7 @@ export class AuthService {
         tenant = await this.tenantModel.create({
           name: dto.organizationName,
           slug: dto.tenantSlug.toLowerCase(),
-          contactEmail: dto.email.toLowerCase(),
+          contactEmail: email,
         });
       }
       if (tenant) {
@@ -54,7 +55,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.userModel.create({
       name: dto.name,
-      email: dto.email.toLowerCase(),
+      email,
       passwordHash,
       role: dto.role || UserRole.CUSTOMER,
       tenantId,
@@ -64,7 +65,8 @@ export class AuthService {
   }
 
   async login(dto: { email: string; password: string }) {
-    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    const email = dto.email.trim().toLowerCase();
+    const user = await this.userModel.findOne({ email });
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -94,7 +96,8 @@ export class AuthService {
   }
 
   async verifyLoginOtp(dto: { email: string; otp: string }) {
-    const user = await this.userModel.findOne({ email: dto.email.toLowerCase() });
+    const email = dto.email.trim().toLowerCase();
+    const user = await this.userModel.findOne({ email });
     if (!user || (user.role !== UserRole.ORGANIZER && user.role !== UserRole.SUPER_ADMIN)) {
       throw new UnauthorizedException('Invalid user');
     }
@@ -119,8 +122,9 @@ export class AuthService {
     return this.generateAuthResponse(user);
   }
 
-  async forgotPassword(email: string, origin?: string) {
-    const user = await this.userModel.findOne({ email: email.toLowerCase() }).populate('tenantId');
+  async forgotPassword(emailInput: string, origin?: string) {
+    const email = emailInput.trim().toLowerCase();
+    const user = await this.userModel.findOne({ email }).populate('tenantId');
     if (!user) {
       // Return success anyway to prevent enumeration
       return { message: 'If the email exists, a reset link has been sent.' };
