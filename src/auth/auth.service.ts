@@ -119,7 +119,7 @@ export class AuthService {
     return this.generateAuthResponse(user);
   }
 
-  async forgotPassword(email: string) {
+  async forgotPassword(email: string, origin?: string) {
     const user = await this.userModel.findOne({ email: email.toLowerCase() }).populate('tenantId');
     if (!user) {
       // Return success anyway to prevent enumeration
