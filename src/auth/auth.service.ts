@@ -119,7 +119,7 @@ export class AuthService {
     return this.generateAuthResponse(user);
   }
 
-  async forgotPassword(email: string) {
+  async forgotPassword(email: string, origin?: string) {
     const user = await this.userModel.findOne({ email: email.toLowerCase() });
     if (!user) {
       // Return success anyway to prevent enumeration
@@ -131,8 +131,12 @@ export class AuthService {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
     await user.save();
 
-    // In a real production app, the frontend URL should be loaded from env.
-    const resetLink = `http://localhost:3003/reset-password?token=${token}`; 
+    const baseUrl = origin || process.env.FRONTEND_URL || 'http://localhost:3003';
+    let path = '/reset-password';
+    if (user.role === UserRole.ORGANIZER || user.role === UserRole.SUPER_ADMIN) {
+      path = '/admin/reset-password';
+    }
+    const resetLink = `${baseUrl}${path}?token=${token}`; 
     await this.resendService.sendPasswordResetEmail(user.email, resetLink, user.name);
 
     return { message: 'If the email exists, a reset link has been sent.' };
