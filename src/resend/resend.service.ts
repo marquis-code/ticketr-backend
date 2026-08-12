@@ -312,17 +312,36 @@ export class ResendService {
         <html>
         <head>
           <style>
-            body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #111827; padding: 40px 20px; }
-            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; padding: 30px; text-align: center; }
-            .otp-box { background: #f8fafc; border: 1px dashed #cbd5e1; font-size: 32px; font-weight: 800; letter-spacing: 5px; padding: 20px; border-radius: 12px; margin: 20px 0; color: #0F4D3F; }
+            body { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; color: #111827; margin: 0; padding: 40px 20px; }
+            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #e5e7eb; }
+            .header { background: #ffffff; padding: 40px 30px 20px; text-align: center; border-bottom: 1px solid #f3f4f6; }
+            .header img { height: 48px; margin-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 24px; font-weight: 800; color: #111827; }
+            .header p { margin: 8px 0 0; color: #6b7280; font-size: 15px; }
+            .body { padding: 40px 30px; text-align: center; }
+            .greeting { font-size: 16px; margin-bottom: 24px; color: #374151; line-height: 1.5; }
+            .otp-box { background: #f8fafc; border: 1px dashed #cbd5e1; font-size: 36px; font-weight: 800; letter-spacing: 8px; padding: 24px; border-radius: 16px; margin: 24px 0; color: #0F4D3F; display: inline-block; box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.02); }
+            .footer { text-align: center; padding: 24px; font-size: 13px; color: #9ca3af; background: #f9fafb; border-top: 1px solid #f3f4f6; }
+            .footer a { color: #0F4D3F; text-decoration: none; font-weight: 600; }
           </style>
         </head>
         <body>
           <div class="card">
-            <h2>Sign in to Ticketr Admin</h2>
-            <p>Hi <strong>${customerName}</strong>, use the following One-Time Password (OTP) to complete your login. It expires in 10 minutes.</p>
-            <div class="otp-box">${otp}</div>
-            <p>If you did not request this, please ignore this email.</p>
+            <div class="header">
+              <img src="https://res.cloudinary.com/marquis/image/upload/v1786452024/ticketr_djxoz9.png" alt="Ticketr Logo" />
+              <h1>Secure Login</h1>
+              <p>Your One-Time Password</p>
+            </div>
+            <div class="body">
+              <div class="greeting">
+                Hi <strong>${customerName}</strong>,<br/><br/>Use the following One-Time Password (OTP) to complete your secure login. It expires in 10 minutes.
+              </div>
+              <div class="otp-box">${otp}</div>
+              <p style="font-size: 13px; color: #64748b; margin-top: 10px;">If you didn't request this code, please ignore this email.</p>
+            </div>
+            <div class="footer">
+              Powered by <strong>Ticketr Admin</strong> | <a href="https://www.ticketr.org">www.ticketr.org</a>
+            </div>
           </div>
         </body>
         </html>
@@ -354,18 +373,37 @@ export class ResendService {
         <html>
         <head>
           <style>
-            body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #111827; padding: 40px 20px; }
-            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; padding: 30px; text-align: center; }
-            .cta-button { display: inline-block; background-color: #0F4D3F; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 600; margin: 20px 0; }
+            body { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; color: #111827; margin: 0; padding: 40px 20px; }
+            .card { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); border: 1px solid #e5e7eb; }
+            .header { background: #ffffff; padding: 40px 30px 20px; text-align: center; border-bottom: 1px solid #f3f4f6; }
+            .header img { height: 48px; margin-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 24px; font-weight: 800; color: #111827; }
+            .header p { margin: 8px 0 0; color: #6b7280; font-size: 15px; }
+            .body { padding: 40px 30px; text-align: center; }
+            .greeting { font-size: 16px; margin-bottom: 24px; color: #374151; line-height: 1.5; }
+            .cta-button { display: inline-block; background-color: #0F4D3F; color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 12px; font-weight: 600; font-size: 16px; margin: 24px 0; transition: background-color 0.2s; box-shadow: 0 4px 6px -1px rgba(15, 77, 63, 0.2); }
+            .cta-button:hover { background-color: #0d4034; }
+            .footer { text-align: center; padding: 24px; font-size: 13px; color: #9ca3af; background: #f9fafb; border-top: 1px solid #f3f4f6; }
+            .footer a { color: #0F4D3F; text-decoration: none; font-weight: 600; }
           </style>
         </head>
         <body>
           <div class="card">
-            <h2>Reset Your Password</h2>
-            <p>Hi <strong>${customerName}</strong>, we received a request to reset your Ticketr password.</p>
-            <p>Click the button below to choose a new password. This link expires in 1 hour.</p>
-            <a href="${resetLink}" class="cta-button">Reset Password</a>
-            <p style="font-size: 12px; color: #6b7280; margin-top: 20px;">If you didn't request this, ignore this email.</p>
+            <div class="header">
+              <img src="https://res.cloudinary.com/marquis/image/upload/v1786452024/ticketr_djxoz9.png" alt="Ticketr Logo" />
+              <h1>Reset Password</h1>
+              <p>Secure Account Recovery</p>
+            </div>
+            <div class="body">
+              <div class="greeting">
+                Hi <strong>${customerName}</strong>,<br/><br/>We received a request to reset the password for your Ticketr account.
+              </div>
+              <a href="${resetLink}" class="cta-button">Set New Password</a>
+              <p style="font-size: 13px; color: #64748b; margin-top: 20px;">This link will expire in 1 hour.<br/>If you didn't request this, you can safely ignore this email.</p>
+            </div>
+            <div class="footer">
+              Powered by <strong>Ticketr Admin</strong> | <a href="https://www.ticketr.org">www.ticketr.org</a>
+            </div>
           </div>
         </body>
         </html>

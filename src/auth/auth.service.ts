@@ -131,25 +131,13 @@ export class AuthService {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
     await user.save();
 
-    let baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    if (user.role === UserRole.ORGANIZER && user.tenantId) {
-      const tenant = user.tenantId as unknown as TenantDocument;
-      // In production, we assume the base domain is ticketr.org if not otherwise set
-      const domain = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).hostname : 'ticketr.org';
-      const protocol = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).protocol : 'https:';
-      const isLocal = domain.includes('localhost');
-      
-      if (isLocal) {
-        baseUrl = `http://admin-${tenant.slug}.localhost:3000`;
-      } else {
-        // e.g. https://admin-thebig5.ticketr.org
-        baseUrl = `${protocol}//admin-${tenant.slug}.${domain.replace('www.', '')}`;
-      }
-    } else if (user.role === UserRole.SUPER_ADMIN) {
-      baseUrl = process.env.SUPER_ADMIN_URL || 'http://admin.localhost:3000';
+    const baseUrl = origin || process.env.FRONTEND_URL || 'http://localhost:3000';
+    let path = '/reset-password';
+    if (user.role === UserRole.ORGANIZER || user.role === UserRole.SUPER_ADMIN) {
+      path = '/admin/reset-password';
     }
 
-    const resetLink = `${baseUrl}/reset-password?token=${token}`; 
+    const resetLink = `${baseUrl}${path}?token=${token}`; 
     await this.resendService.sendPasswordResetEmail(user.email, resetLink, user.name);
 
     return { message: 'If the email exists, a reset link has been sent.' };
