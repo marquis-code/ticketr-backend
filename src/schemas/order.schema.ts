@@ -6,6 +6,7 @@ export type OrderDocument = Order & Document;
 export enum OrderStatus {
   PENDING = 'PENDING',
   AWAITING_APPROVAL = 'AWAITING_APPROVAL',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
   PAID = 'PAID',
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
@@ -66,6 +67,24 @@ export class Order {
   @Prop({ type: String, enum: OrderStatus, default: OrderStatus.PENDING, index: true })
   status: OrderStatus;
 
+  @Prop()
+  promoCode?: string;
+
+  @Prop()
+  discountAmount?: number;
+
+  @Prop({ default: false })
+  isInstallmentPlan: boolean;
+
+  @Prop({ default: 0 })
+  amountPaid: number;
+
+  @Prop({ default: 0 })
+  amountRemaining: number;
+
+  @Prop()
+  nextPaymentDueDate?: Date;
+
   @Prop({ index: true })
   paystackReference?: string;
 
@@ -78,11 +97,17 @@ export class Order {
   @Prop()
   proofOfPaymentUrl?: string;
 
+  @Prop({ index: true })
+  bankReference?: string;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
   approvedBy?: string;
 
   @Prop()
   forceApproveReason?: string;
+
+  @Prop({ type: String, default: 'PAYMENT_PENDING' })
+  checkoutStep?: string;
 
   @Prop({ default: 'PAYSTACK' })
   paymentMethod: string;

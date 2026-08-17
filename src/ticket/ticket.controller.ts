@@ -41,4 +41,34 @@ export class TicketController {
   async getTicketByNumber(@Param('ticketNumber') ticketNumber: string) {
     return this.ticketService.getTicketByNumber(ticketNumber);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/transfer')
+  async transferTicket(
+    @Request() req,
+    @Param('id') ticketId: string,
+    @Body() body: { newAttendeeName: string; newAttendeeEmail: string },
+  ) {
+    return this.ticketService.transferTicket(
+      ticketId,
+      req.user.userId,
+      body.newAttendeeName,
+      body.newAttendeeEmail,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/claim')
+  async claimGroupTicket(
+    @Request() req,
+    @Param('id') ticketId: string,
+    @Body() body: { attendeeName: string; attendeeEmail: string },
+  ) {
+    return this.ticketService.claimGroupTicket(
+      ticketId,
+      body.attendeeName,
+      body.attendeeEmail,
+      req.user.userId,
+    );
+  }
 }

@@ -29,14 +29,23 @@ export class Ticket {
   @Prop()
   departmentCode?: string;
 
-  @Prop({ required: true })
-  attendeeName: string;
+  @Prop()
+  attendeeName?: string; // Optional for group tickets until claimed
 
-  @Prop({ required: true, lowercase: true })
-  attendeeEmail: string;
+  @Prop({ lowercase: true })
+  attendeeEmail?: string; // Optional for group tickets until claimed
 
   @Prop({ required: true, unique: true, index: true })
   qrCodeHash: string; // HMAC token encoded inside QR code image
+
+  @Prop({ default: false })
+  isGroupTicket: boolean;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
+  claimedById?: string;
+
+  @Prop()
+  claimedAt?: Date;
 
   @Prop({ type: String, enum: TicketStatus, default: TicketStatus.ISSUED, index: true })
   status: TicketStatus;

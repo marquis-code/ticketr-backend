@@ -5,17 +5,9 @@ async function run() {
   try {
     await client.connect();
     const db = client.db('test');
-    
-    const email = 'Junaidabisola280@gmail.com'.toLowerCase();
-    
-    const orders = await db.collection('orders').find({ customerEmail: email }).toArray();
-    console.log(`Found ${orders.length} orders for ${email}:`);
+    const orders = await db.collection('orders').find({ customerName: { $regex: /Ogunmola Babalola/i } }).toArray();
+    console.log(`Found ${orders.length} orders for Ogunmola Babalola:`);
     orders.forEach(o => console.log(` - ID: ${o._id}, Num: ${o.orderNumber}, Status: ${o.status}`));
-
-    const users = await db.collection('users').find({ email: email }).toArray();
-    console.log(`Found ${users.length} users for ${email}:`);
-    users.forEach(u => console.log(` - ID: ${u._id}, Name: ${u.firstName} ${u.lastName}`));
-
   } catch (err) {
     console.error(err);
   } finally {

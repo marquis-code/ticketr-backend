@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Ticket, TicketDocument, TicketStatus } from '../schemas/ticket.schema';
@@ -146,19 +147,72 @@ export class TicketService {
 
     const ticketImageBuffer = await this.ticketGeneratorService.generateTicketImage({
       templateImageUrl: tier.templateImageUrl,
-      attendeeName: ticket.attendeeName,
+      attendeeName: ticket.attendeeName || 'Guest',
       ticketNumber: ticket.ticketNumber,
       qrCodeHash: qrCodeUrl,
     });
 
     return this.ticketGeneratorService.generateTicketPdf({
       ticketImageBuffer,
-      attendeeName: ticket.attendeeName,
+      attendeeName: ticket.attendeeName || 'Guest',
       eventName: event.title || 'Event Ticket',
       eventDate: event.startDate ? new Date(event.startDate).toLocaleString() : '',
       eventLocation: event.location || '',
       ticketNumber: ticket.ticketNumber,
-      tierName: tier.name,
+      tierName: tier.name || 'Standard',
     });
+  }
+
+  async claimGroupTicket(ticketId: string, attendeeName: string, attendeeEmail: string, claimedById: string) {
+    const ticket = await this.ticketModel.findById(ticketId);
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found');
+    }
+    if (!ticket.isGroupTicket) {
+      throw new BadRequestException('This is not a group ticket');
+    }
+    if (ticket.claimedAt) {
+      throw new BadRequestException('This ticket has already been claimed');
+    }
+
+    ticket.attendeeName = attendeeName;
+    ticket.attendeeEmail = attendeeEmail;
+    ticket.claimedById = claimedById;
+    ticket.claimedAt = new Date();
+
+    return ticket.save();
+  }
+
+  async transferTicket(ticketId: string, currentOwnerId: string, newAttendeeName: string, newAttendeeEmail: string, newOwnerId?: string) {
+    const ticket = await this.ticketModel.findById(ticketId);
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found');
+    }
+    
+    // In a real app, verify that the requester is the current owner or admin
+    if (ticket.status !== TicketStatus.ISSUED) {
+      throw new BadRequestException('Only issued (unused) tickets can be transferred');
+    }
+    if (!ticket.isResaleable) {
+      throw new BadRequestException('This ticket is not allowed to be transferred');
+    }
+
+    // Invalidate the old QR code by regenerating the hash
+    const newQrCodeHash = crypto
+      .createHash('sha256')
+      .update(`${ticket.orderId}-${ticket.ticketNumber}-${Date.now()}-${Math.random()}-TRANSFERRED`)
+      .digest('hex');
+
+    ticket.qrCodeHash = newQrCodeHash;
+    ticket.attendeeName = newAttendeeName;
+    ticket.attendeeEmail = newAttendeeEmail;
+    if (newOwnerId) {
+      ticket.currentOwnerId = newOwnerId;
+    }
+
+    await ticket.save();
+    
+    // Return the updated ticket with the new hash so a new PDF/Email can be generated
+    return ticket;
   }
 }

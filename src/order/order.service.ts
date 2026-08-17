@@ -72,6 +72,9 @@ export class OrderService {
     customerEmail: string;
     customerPhone?: string;
     departmentCode?: string;
+    isInstallmentPlan?: boolean;
+    promoCode?: string;
+    discountAmount?: number;
     items: Array<{ tierId: string; quantity: number; attendees?: { name: string; email: string }[] }>;
     callbackUrl: string;
   }) {
@@ -143,6 +146,120 @@ export class OrderService {
       });
     }
 
+    // Apply discount if promo code was used
+    const discountAmount = dto.discountAmount && dto.discountAmount > 0 ? Math.min(dto.discountAmount, totalAmount) : 0;
+    const chargeableAmount = totalAmount - discountAmount;
+
+    const normalizedEmail = dto.customerEmail.toLowerCase().trim();
+
+    // 1. Check if customer already has a PAID order for this event
+    const existingPaidOrder = await this.orderModel.findOne({
+      eventId: dto.eventId,
+      customerEmail: normalizedEmail,
+      status: OrderStatus.PAID,
+    });
+    if (existingPaidOrder) {
+      return {
+        isAlreadyPaid: true,
+        orderId: existingPaidOrder._id.toString(),
+        orderNumber: existingPaidOrder.orderNumber,
+        customerEmail: existingPaidOrder.customerEmail,
+        customerName: existingPaidOrder.customerName,
+        totalAmount: existingPaidOrder.totalAmount,
+        message: `You already have a confirmed and paid ticket (Order #${existingPaidOrder.orderNumber}) for this event!`,
+      };
+    }
+
+    // 2. Check if customer has an existing PENDING or AWAITING_APPROVAL order (Resume session to avoid duplicate orders!)
+    const existingPendingOrder = await this.orderModel.findOne({
+      eventId: dto.eventId,
+      customerEmail: normalizedEmail,
+      status: { $in: [OrderStatus.PENDING, OrderStatus.AWAITING_APPROVAL] },
+    });
+
+    if (existingPendingOrder) {
+      // If proof was already uploaded and order is awaiting organizer approval
+      if (existingPendingOrder.status === OrderStatus.AWAITING_APPROVAL) {
+        return {
+          resumedSession: true,
+          isAwaitingApproval: true,
+          orderId: existingPendingOrder._id.toString(),
+          orderNumber: existingPendingOrder.orderNumber,
+          totalAmount: existingPendingOrder.totalAmount,
+          status: existingPendingOrder.status,
+          checkoutStep: 'PROOF_UPLOADED',
+          proofOfPaymentUrl: existingPendingOrder.proofOfPaymentUrl,
+          paymentMethod: existingPendingOrder.paymentMethod,
+          remittanceAccount: tenant.primaryRemittanceAccount || tenant.remittanceAccount,
+          message: `You already have an order #${existingPendingOrder.orderNumber} with proof of payment awaiting organizer approval.`,
+        };
+      }
+
+      // Resume & update the existing pending order session
+      existingPendingOrder.customerName = dto.customerName;
+      existingPendingOrder.customerPhone = dto.customerPhone;
+      existingPendingOrder.departmentCode = dto.departmentCode;
+      existingPendingOrder.items = orderItems;
+      existingPendingOrder.totalAmount = chargeableAmount;
+      existingPendingOrder.discountAmount = discountAmount;
+      existingPendingOrder.promoCode = dto.promoCode;
+      existingPendingOrder.checkoutStep = 'PAYMENT_PENDING';
+      await existingPendingOrder.save();
+
+      if (tenant.paymentMethod === 'MANUAL_TRANSFER') {
+        return {
+          resumedSession: true,
+          orderId: existingPendingOrder._id.toString(),
+          orderNumber: existingPendingOrder.orderNumber,
+          totalAmount: existingPendingOrder.totalAmount,
+          paymentMethod: 'MANUAL_TRANSFER',
+          checkoutStep: 'PAYMENT_PENDING',
+          remittanceAccount: tenant.primaryRemittanceAccount || tenant.remittanceAccount,
+          message: `Resumed your existing order session #${existingPendingOrder.orderNumber}.`,
+        };
+      }
+
+      // For Paystack, initialize transaction on existing order
+      const paystackRef = existingPendingOrder.paystackReference || `REF-${existingPendingOrder.orderNumber}`;
+      existingPendingOrder.paystackReference = paystackRef;
+      const amountToCharge = dto.isInstallmentPlan ? chargeableAmount / 2 : chargeableAmount;
+      const amountInKobo = Math.round(amountToCharge * 100);
+      const paystackPayload: any = {
+        email: normalizedEmail,
+        amountInKobo,
+        reference: `${paystackRef}-${Date.now().toString(36)}`,
+        callbackUrl: dto.callbackUrl,
+        subaccount: tenant?.paystackSubaccountCode || undefined,
+        metadata: {
+          orderId: existingPendingOrder._id.toString(),
+          eventId: dto.eventId,
+          tenantId: dto.tenantId,
+          departmentCode: dto.departmentCode,
+        },
+      };
+
+      if (totalMarkupAmount > 0) {
+        paystackPayload.transaction_charge = Math.round(totalMarkupAmount * 100);
+        paystackPayload.bearer = 'account';
+      }
+
+      const paystackResponse = await this.paystackService.initializeTransaction(paystackPayload);
+      existingPendingOrder.paystackAccessCode = paystackResponse.access_code;
+      await existingPendingOrder.save();
+
+      return {
+        resumedSession: true,
+        orderId: existingPendingOrder._id.toString(),
+        orderNumber: existingPendingOrder.orderNumber,
+        totalAmount: existingPendingOrder.totalAmount,
+        paymentMethod: 'PAYSTACK',
+        authorizationUrl: paystackResponse.authorization_url,
+        reference: paystackPayload.reference,
+        message: `Resumed your existing order session #${existingPendingOrder.orderNumber}.`,
+      };
+    }
+
+    // 3. Create fresh order if no previous session exists
     const orderNumber = `CMT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     const paystackRef = `REF-${orderNumber}`;
 
@@ -151,13 +268,18 @@ export class OrderService {
       eventId: dto.eventId,
       orderNumber,
       customerName: dto.customerName,
-      customerEmail: dto.customerEmail.toLowerCase(),
+      customerEmail: normalizedEmail,
       customerPhone: dto.customerPhone,
       departmentCode: dto.departmentCode,
       items: orderItems,
-      totalAmount,
+      totalAmount: chargeableAmount,
       currency: 'NGN',
       status: OrderStatus.PENDING,
+      checkoutStep: 'PAYMENT_PENDING',
+      isInstallmentPlan: dto.isInstallmentPlan || false,
+      amountRemaining: dto.isInstallmentPlan ? chargeableAmount : 0,
+      promoCode: dto.promoCode,
+      discountAmount,
       paystackReference: tenant.paymentMethod === 'PAYSTACK' ? paystackRef : undefined,
       paymentMethod: tenant.paymentMethod || 'PAYSTACK',
     });
@@ -168,13 +290,16 @@ export class OrderService {
         orderNumber: order.orderNumber,
         totalAmount: order.totalAmount,
         paymentMethod: 'MANUAL_TRANSFER',
+        checkoutStep: 'PAYMENT_PENDING',
         remittanceAccount: tenant.primaryRemittanceAccount || tenant.remittanceAccount,
       };
     }
 
-    const amountInKobo = Math.round(totalAmount * 100);
+    // If installment plan, charge 50% upfront.
+    const amountToCharge = dto.isInstallmentPlan ? chargeableAmount / 2 : chargeableAmount;
+    const amountInKobo = Math.round(amountToCharge * 100);
     const paystackPayload: any = {
-      email: dto.customerEmail,
+      email: normalizedEmail,
       amountInKobo,
       reference: paystackRef,
       callbackUrl: dto.callbackUrl,
@@ -207,12 +332,66 @@ export class OrderService {
     };
   }
 
+  async getActiveSession(eventId: string, email: string) {
+    if (!eventId || !email) return null;
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // 1. Check for paid order
+    const paidOrder = await this.orderModel.findOne({
+      eventId,
+      customerEmail: normalizedEmail,
+      status: OrderStatus.PAID,
+    });
+    if (paidOrder) {
+      return {
+        status: 'PAID',
+        isAlreadyPaid: true,
+        orderId: paidOrder._id.toString(),
+        orderNumber: paidOrder.orderNumber,
+        customerName: paidOrder.customerName,
+        customerEmail: paidOrder.customerEmail,
+        totalAmount: paidOrder.totalAmount,
+        paidAt: paidOrder.paidAt,
+        message: `You have an active confirmed ticket (#${paidOrder.orderNumber}) for this event!`,
+      };
+    }
+
+    // 2. Check for active pending / awaiting approval order
+    const pendingOrder = await this.orderModel.findOne({
+      eventId,
+      customerEmail: normalizedEmail,
+      status: { $in: [OrderStatus.PENDING, OrderStatus.AWAITING_APPROVAL] },
+    });
+
+    if (pendingOrder) {
+      const tenant = await this.tenantModel.findById(pendingOrder.tenantId);
+      return {
+        hasPendingSession: true,
+        status: pendingOrder.status,
+        orderId: pendingOrder._id.toString(),
+        orderNumber: pendingOrder.orderNumber,
+        customerName: pendingOrder.customerName,
+        customerEmail: pendingOrder.customerEmail,
+        departmentCode: pendingOrder.departmentCode,
+        items: pendingOrder.items,
+        totalAmount: pendingOrder.totalAmount,
+        checkoutStep: pendingOrder.checkoutStep || (pendingOrder.status === OrderStatus.AWAITING_APPROVAL ? 'PROOF_UPLOADED' : 'PAYMENT_PENDING'),
+        proofOfPaymentUrl: pendingOrder.proofOfPaymentUrl,
+        paymentMethod: pendingOrder.paymentMethod,
+        remittanceAccount: tenant ? (tenant.primaryRemittanceAccount || tenant.remittanceAccount) : null,
+        createdAt: (pendingOrder as any).createdAt,
+      };
+    }
+
+    return null;
+  }
+
   async uploadProofOfPayment(orderId: string, tenantId: string, file: Express.Multer.File) {
     const order = await this.orderModel.findOne({ _id: orderId, tenantId });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    if (order.status !== OrderStatus.PENDING) {
+    if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.AWAITING_APPROVAL) {
       throw new BadRequestException('Order is not in a pending state');
     }
 
@@ -229,22 +408,64 @@ export class OrderService {
     }
     
     order.proofOfPaymentUrl = proofOfPaymentUrl;
+    order.checkoutStep = 'PROOF_UPLOADED';
     order.status = OrderStatus.AWAITING_APPROVAL;
     await order.save();
 
     return order;
   }
 
-  async forceApproveOrder(orderId: string, adminUserId: string, reason?: string) {
+  async forceApproveOrder(
+    orderId: string,
+    adminUserId: string,
+    dto: { reason: string; bankReference: string },
+    file?: Express.Multer.File,
+  ) {
     const order = await this.orderModel.findById(orderId);
     if (!order) throw new NotFoundException('Order not found');
     
-    if (order.status !== OrderStatus.PENDING) {
-      throw new BadRequestException('Order is not in pending state');
+    if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.AWAITING_APPROVAL) {
+      throw new BadRequestException('Order is not in pending or awaiting approval state');
     }
 
+    if (!dto.bankReference || !dto.bankReference.trim()) {
+      throw new BadRequestException('Bank Transaction Reference / Session ID is compulsory');
+    }
+
+    const trimmedBankRef = dto.bankReference.trim();
+
+    // Prevent duplicate use of the same Bank Reference across paid/awaiting orders
+    const existingOrderByRef = await this.orderModel.findOne({
+      _id: { $ne: order._id },
+      bankReference: { $regex: new RegExp(`^${trimmedBankRef.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      status: { $in: [OrderStatus.PAID, OrderStatus.AWAITING_APPROVAL] },
+    });
+
+    if (existingOrderByRef) {
+      throw new BadRequestException(
+        `This Bank Transaction Reference / Session ID ('${trimmedBankRef}') has already been used for order #${existingOrderByRef.orderNumber}. Duplicate payments are strictly prohibited.`,
+      );
+    }
+
+    if (!file && !order.proofOfPaymentUrl) {
+      throw new BadRequestException('Proof of payment receipt upload is compulsory to mark an order as paid');
+    }
+
+    let proofOfPaymentUrl = order.proofOfPaymentUrl;
+    if (file) {
+      try {
+        proofOfPaymentUrl = await this.cloudinaryService.uploadImage(file, 'ticketr/receipts');
+      } catch (err) {
+        console.warn('Cloudinary upload failed, falling back to mock receipt URL', err.message);
+        proofOfPaymentUrl = 'https://res.cloudinary.com/marquis/image/upload/v1723200000/ticketr/receipts/mock-receipt.png';
+      }
+    }
+
+    order.proofOfPaymentUrl = proofOfPaymentUrl;
+    order.bankReference = trimmedBankRef;
     order.approvedBy = adminUserId;
-    if (reason) order.forceApproveReason = reason;
+    order.paymentMethod = 'MANUAL_TRANSFER';
+    if (dto.reason) order.forceApproveReason = dto.reason;
     await order.save();
 
     return this.verifyAndFulfillOrder(`FORCE-PAID-${order.paystackReference || order.orderNumber}`);
@@ -345,9 +566,35 @@ export class OrderService {
       throw new BadRequestException('Payment was not completed successfully');
     }
 
-    order.status = OrderStatus.PAID;
-    order.paidAt = new Date();
+    let paymentAmount = order.totalAmount;
+    if (order.isInstallmentPlan) {
+      paymentAmount = order.totalAmount / 2;
+    }
+
+    order.amountPaid = (order.amountPaid || 0) + paymentAmount;
+    order.amountRemaining = order.totalAmount - order.amountPaid;
+    
+    if (order.amountRemaining > 0) {
+      order.status = OrderStatus.PARTIALLY_PAID;
+      order.nextPaymentDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days later
+    } else {
+      order.status = OrderStatus.PAID;
+      order.paidAt = new Date();
+    }
+    
     await order.save();
+    
+    // Only issue tickets if fully paid (or if you want to issue them partially paid, you can change this)
+    if (order.status === OrderStatus.PARTIALLY_PAID) {
+      return {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        status: order.status,
+        amountPaid: order.amountPaid,
+        amountRemaining: order.amountRemaining,
+        message: 'Installment payment received successfully. Tickets will be issued upon full payment.'
+      };
+    }
 
     const tenant = await this.tenantModel.findById(order.tenantId).exec();
 
@@ -523,5 +770,48 @@ export class OrderService {
       .populate('eventId')
       .sort({ createdAt: -1 })
       .exec();
+  }
+
+  async validatePromoCode(code: string, eventId: string) {
+    if (!code) {
+      throw new BadRequestException('Promo code is required');
+    }
+
+    const event = await this.eventModel.findById(eventId);
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+
+    // Check if event has promo codes defined (uses the promoCodes field on the Event schema)
+    const promoCodes = (event as any).promoCodes || [];
+    const normalizedCode = code.toUpperCase().trim();
+    const matched = promoCodes.find(
+      (p: any) => p.code.toUpperCase() === normalizedCode && p.isActive !== false,
+    );
+
+    if (!matched) {
+      // Fallback: allow hardcoded EARLYBIRD code for backward compatibility
+      if (normalizedCode === 'EARLYBIRD') {
+        return { valid: true, code: 'EARLYBIRD', type: 'PERCENTAGE', value: 10 };
+      }
+      throw new BadRequestException('Invalid or expired promo code');
+    }
+
+    // Check expiry if set
+    if (matched.expiresAt && new Date(matched.expiresAt) < new Date()) {
+      throw new BadRequestException('This promo code has expired');
+    }
+
+    // Check usage limit
+    if (matched.maxUses && matched.usedCount >= matched.maxUses) {
+      throw new BadRequestException('This promo code has reached its usage limit');
+    }
+
+    return {
+      valid: true,
+      code: matched.code,
+      type: matched.type || 'PERCENTAGE',
+      value: matched.value || 10,
+    };
   }
 }

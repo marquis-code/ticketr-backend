@@ -27,8 +27,11 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuditInterceptor } from './audit/audit.interceptor';
 
+import { ScheduleModule } from '@nestjs/schedule';
+
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),

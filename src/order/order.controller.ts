@@ -25,9 +25,30 @@ export class OrderController {
       customerEmail: body.customerEmail,
       customerPhone: body.customerPhone,
       departmentCode: body.departmentCode,
-      items: body.items, // Ensure items includes attendees
+      items: body.items,
       callbackUrl: body.callbackUrl,
+      promoCode: body.promoCode,
+      discountAmount: body.discountAmount,
     });
+  }
+
+  @Get('validate-promo')
+  async validatePromoCode(
+    @Query('code') code: string,
+    @Query('eventId') eventId: string,
+  ) {
+    return this.orderService.validatePromoCode(code, eventId);
+  }
+
+  @Get('active-session')
+  async getActiveSession(
+    @Query('eventId') eventId: string,
+    @Query('email') email: string,
+  ) {
+    if (!eventId || !email) {
+      throw new BadRequestException('eventId and email are required');
+    }
+    return this.orderService.getActiveSession(eventId, email);
   }
 
   @Get('verify')
@@ -94,18 +115,33 @@ export class OrderController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
   @Patch('admin/:id/force-approve')
-  async forceApproveOrder(@Request() req, @Param('id') orderId: string, @Body() body: { reason: string }) {
-    if (!body?.reason) {
-      throw new BadRequestException('Reason is required to manually mark an order as paid');
+  @UseInterceptors(FileInterceptor('receipt'))
+  async forceApproveOrder(
+    @Request() req,
+    @Param('id') orderId: string,
+    @Body('reason') reason: string,
+    @Body('bankReference') bankReference: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!bankReference || !bankReference.trim()) {
+      throw new BadRequestException('Bank Transaction Reference / Session ID is compulsory');
     }
-    const result = await this.orderService.forceApproveOrder(orderId, req.user.userId, body.reason);
+    if (!reason || !reason.trim()) {
+      throw new BadRequestException('Reason is compulsory to manually mark an order as paid');
+    }
+    const result = await this.orderService.forceApproveOrder(
+      orderId,
+      req.user.userId,
+      { reason: reason.trim(), bankReference: bankReference.trim() },
+      file,
+    );
     await this.auditService.logAction({
       action: 'ORDER_FORCE_APPROVED',
       entity: 'Order',
       entityId: orderId,
       userId: req.user.userId,
       tenantId: req.user.tenantId,
-      details: { reason: body.reason }
+      details: { reason: reason.trim(), bankReference: bankReference.trim() },
     });
     return result;
   }

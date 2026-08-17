@@ -46,6 +46,9 @@ export class Event {
   @Prop({ type: [String], default: [] })
   carouselImages: string[];
 
+  @Prop({ type: [String], default: [] })
+  galleryImages: string[];
+
   @Prop({ required: true })
   location: string; // Physical address or Virtual Meeting URL
 
@@ -75,6 +78,28 @@ export class Event {
 
   @Prop({ type: [String], default: [] })
   tags: string[];
+
+  @Prop({
+    type: [{
+      code: { type: String, required: true },
+      type: { type: String, enum: ['PERCENTAGE', 'FLAT'], default: 'PERCENTAGE' },
+      value: { type: Number, required: true },
+      maxUses: { type: Number, default: null },
+      usedCount: { type: Number, default: 0 },
+      expiresAt: { type: Date, default: null },
+      isActive: { type: Boolean, default: true },
+    }],
+    default: [],
+  })
+  promoCodes: Array<{
+    code: string;
+    type: 'PERCENTAGE' | 'FLAT';
+    value: number;
+    maxUses?: number;
+    usedCount?: number;
+    expiresAt?: Date;
+    isActive?: boolean;
+  }>;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
   createdBy: string;
