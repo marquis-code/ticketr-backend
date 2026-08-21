@@ -607,16 +607,19 @@ export class OrderService {
     for (const item of order.items) {
       ticketDetailsList.push(`- ${item.quantity}x ${item.tierName} (₦${item.subtotal.toLocaleString()})`);
       
-      const tierDoc = await this.ticketTierModel.findByIdAndUpdate(
+      const tierDoc = await this.ticketTierModel.findById(item.tierId);
+      const ticketsToGenerate = tierDoc?.isCoupleTicket ? item.quantity * 2 : item.quantity;
+
+      const updatedTierDoc = await this.ticketTierModel.findByIdAndUpdate(
         item.tierId,
-        { $inc: { soldCount: item.quantity } },
+        { $inc: { soldCount: ticketsToGenerate } },
         { new: true },
       );
 
-      const currentSoldCount = tierDoc ? tierDoc.soldCount : item.quantity;
-      const startTicketIndex = currentSoldCount - item.quantity + 1;
+      const currentSoldCount = updatedTierDoc ? updatedTierDoc.soldCount : ticketsToGenerate;
+      const startTicketIndex = currentSoldCount - ticketsToGenerate + 1;
 
-      for (let i = 0; i < item.quantity; i++) {
+      for (let i = 0; i < ticketsToGenerate; i++) {
         const ticketIndex = startTicketIndex + i;
 
         const attendeeInfo = item.attendees && item.attendees[i] 

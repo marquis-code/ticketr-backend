@@ -289,6 +289,7 @@ export class EventService {
       markupFee: body.markupFee || 0,
       markupFeeType: body.markupFeeType || MarkupFeeType.FLAT,
       markupStrategy: body.markupStrategy || MarkupStrategy.ADD_TO_FEE,
+      isCoupleTicket: body.isCoupleTicket || false,
     });
     return newTier;
   }
@@ -306,6 +307,7 @@ export class EventService {
     if (body.markupFee !== undefined) updateData.markupFee = body.markupFee;
     if (body.markupFeeType) updateData.markupFeeType = body.markupFeeType;
     if (body.markupStrategy) updateData.markupStrategy = body.markupStrategy;
+    if (body.isCoupleTicket !== undefined) updateData.isCoupleTicket = body.isCoupleTicket;
 
     const tier = await this.ticketTierModel.findOneAndUpdate(
       { _id: tierId, eventId },

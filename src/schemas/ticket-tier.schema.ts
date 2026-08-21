@@ -41,6 +41,9 @@ export class TicketTier {
 
   @Prop({ type: String, enum: MarkupStrategy, default: MarkupStrategy.ADD_TO_FEE })
   markupStrategy: MarkupStrategy;
+
+  @Prop({ default: false })
+  isCoupleTicket: boolean;
 }
 
 export const TicketTierSchema = SchemaFactory.createForClass(TicketTier);
