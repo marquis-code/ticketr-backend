@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TicketGeneratorModule } from '../ticket-generator/ticket-generator.module';
+import { ResendModule } from '../resend/resend.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { TicketService } from './ticket.service';
 import { TicketController } from './ticket.controller';
@@ -13,6 +14,7 @@ import { Event, EventSchema } from '../schemas/event.schema';
       { name: Event.name, schema: EventSchema },
     ]),
     TicketGeneratorModule,
+    ResendModule,
   ],
   controllers: [TicketController],
   providers: [TicketService],

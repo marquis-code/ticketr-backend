@@ -71,4 +71,14 @@ export class TicketController {
       req.user.userId,
     );
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN, UserRole.STAFF)
+  @Post(':id/resend-email')
+  async resendTicketEmail(
+    @Param('id') ticketId: string,
+    @Body() body: { newEmail?: string },
+  ) {
+    return this.ticketService.resendTicketEmail(ticketId, body.newEmail);
+  }
 }

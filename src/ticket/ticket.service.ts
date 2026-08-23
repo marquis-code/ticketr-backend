@@ -6,6 +6,7 @@ import { Ticket, TicketDocument, TicketStatus } from '../schemas/ticket.schema';
 import { Event, EventDocument } from '../schemas/event.schema';
 import { RedisService } from '../redis/redis.service';
 import { TicketGeneratorService } from '../ticket-generator/ticket-generator.service';
+import { ResendService } from '../resend/resend.service';
 
 @Injectable()
 export class TicketService {
@@ -14,6 +15,7 @@ export class TicketService {
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
     private redisService: RedisService,
     private ticketGeneratorService: TicketGeneratorService,
+    private resendService: ResendService,
   ) {}
 
   async verifyScan(inputToken: string, scannedByUserId: string, commit: boolean = true) {
@@ -213,6 +215,89 @@ export class TicketService {
     await ticket.save();
     
     // Return the updated ticket with the new hash so a new PDF/Email can be generated
+    return ticket;
+  }
+
+  async resendTicketEmail(ticketId: string, newEmail?: string) {
+    const ticket = await this.ticketModel.findById(ticketId)
+      .populate('eventId')
+      .populate('tierId')
+      .populate('tenantId')
+      .exec();
+
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found');
+    }
+
+    if (newEmail) {
+      ticket.attendeeEmail = newEmail;
+      await ticket.save();
+    }
+
+    if (!ticket.attendeeEmail) {
+      throw new BadRequestException('Ticket has no attendee email address assigned');
+    }
+
+    const tier = ticket.tierId as any;
+    const event = ticket.eventId as any;
+    const tenant = ticket.tenantId as any;
+    
+    const adminDomain = tenant && tenant.slug ? `admin-${tenant.slug}.ticketr.org` : 'admin.ticketr.org';
+    const qrCodeUrl = `https://${adminDomain}/verify/${ticket.qrCodeHash}`;
+    let customImageUrl = tier?.templateImageUrl || '';
+    
+    let ticketImageBuffer: Buffer | undefined;
+    let ticketPdfBuffer: Buffer | undefined;
+
+    if (customImageUrl) {
+      try {
+        ticketImageBuffer = await this.ticketGeneratorService.generateTicketImage({
+          templateImageUrl: customImageUrl,
+          attendeeName: ticket.attendeeName || 'Guest',
+          ticketNumber: ticket.ticketNumber,
+          qrCodeHash: qrCodeUrl,
+        });
+        
+        ticketPdfBuffer = await this.ticketGeneratorService.generateTicketPdf({
+          ticketImageBuffer,
+          attendeeName: ticket.attendeeName || 'Guest',
+          eventName: event ? event.title : 'Event Ticket',
+          eventDate: event && event.startDate ? new Date(event.startDate).toLocaleString() : '',
+          eventLocation: event ? event.location : '',
+          ticketNumber: ticket.ticketNumber,
+          tierName: tier ? tier.name : 'Standard',
+        });
+        
+        customImageUrl = '';
+      } catch (error) {
+        console.error(`Failed to generate custom ticket for ${ticket.ticketNumber}`, error);
+      }
+    }
+
+    try {
+      await this.resendService.sendTicketEmail({
+        toEmail: ticket.attendeeEmail,
+        customerName: ticket.attendeeName || 'Guest',
+        eventName: event ? event.title : 'Event Ticket',
+        eventDate: event && event.startDate ? new Date(event.startDate).toLocaleString() : '',
+        eventLocation: event ? event.location : '',
+        ticketNumber: ticket.ticketNumber,
+        tierName: tier ? tier.name : 'Standard',
+        qrCodeHash: qrCodeUrl,
+        ticketImageUrl: customImageUrl,
+        ticketImageBuffer,
+        ticketPdfBuffer,
+      });
+      
+      ticket.emailSent = true;
+      await ticket.save();
+    } catch (emailErr) {
+      console.error(`Failed to resend ticket email to ${ticket.attendeeEmail}`, emailErr);
+      ticket.emailSent = false;
+      await ticket.save();
+      throw new BadRequestException('Internal server error while attempting to send ticket email');
+    }
+
     return ticket;
   }
 }

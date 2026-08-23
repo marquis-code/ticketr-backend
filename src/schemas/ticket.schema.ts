@@ -61,6 +61,9 @@ export class Ticket {
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
   checkedInBy?: string; // Scanner staff user ID
+
+  @Prop({ default: false })
+  emailSent: boolean;
 }
 
 export const TicketSchema = SchemaFactory.createForClass(Ticket);

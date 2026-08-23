@@ -709,8 +709,12 @@ export class OrderService {
             ticketImageBuffer,
             ticketPdfBuffer,
           });
+          ticket.emailSent = true;
+          await ticket.save();
         } catch (emailErr) {
           this.logger.error(`Failed to send ticket email to ${attendeeInfo.email}`, emailErr);
+          ticket.emailSent = false;
+          await ticket.save();
         }
       }
     }
