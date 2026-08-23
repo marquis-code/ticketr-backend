@@ -532,6 +532,15 @@ export class OrderService {
     return order;
   }
 
+  async deleteOrder(orderId: string, adminUserId: string) {
+    const order = await this.orderModel.findById(orderId);
+    if (!order) throw new NotFoundException('Order not found');
+    
+    await this.orderModel.findByIdAndDelete(orderId);
+    
+    return { success: true, message: 'Order deleted successfully' };
+  }
+
   async verifyAndFulfillOrder(reference: string) {
     const cleanRef = reference.replace('FORCE-PAID-', '');
     const order = await this.orderModel.findOne({

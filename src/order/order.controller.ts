@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Query, Headers, Request, BadRequestException, Patch, UploadedFile, UseInterceptors, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Query, Headers, Request, BadRequestException, Patch, Delete, UploadedFile, UseInterceptors, UseGuards } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrderService } from './order.service';
 import { PaystackService } from '../paystack/paystack.service';
@@ -183,6 +183,21 @@ export class OrderController {
     const result = await this.orderService.rejectOrder(orderId, req.user.userId);
     await this.auditService.logAction({
       action: 'ORDER_REJECTED',
+      entity: 'Order',
+      entityId: orderId,
+      userId: req.user.userId,
+      tenantId: req.user.tenantId,
+    });
+    return result;
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
+  @Delete('admin/:id')
+  async deleteOrder(@Request() req, @Param('id') orderId: string) {
+    const result = await this.orderService.deleteOrder(orderId, req.user.userId);
+    await this.auditService.logAction({
+      action: 'ORDER_DELETED',
       entity: 'Order',
       entityId: orderId,
       userId: req.user.userId,
