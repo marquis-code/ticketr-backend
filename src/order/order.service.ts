@@ -691,32 +691,40 @@ export class OrderService {
           }
         }
 
-        await this.resendService.sendTicketEmail({
-          toEmail: attendeeInfo.email,
-          customerName: attendeeInfo.name,
-          eventName: event ? event.title : 'Event Ticket',
-          eventDate: event ? new Date(event.startDate).toLocaleString() : '',
-          eventLocation: event ? event.location : '',
-          ticketNumber: formattedTicketCode,
-          tierName: item.tierName,
-          qrCodeHash: qrCodeUrl,
-          ticketImageUrl: customImageUrl,
-          ticketImageBuffer,
-          ticketPdfBuffer,
-        });
+        try {
+          await this.resendService.sendTicketEmail({
+            toEmail: attendeeInfo.email,
+            customerName: attendeeInfo.name,
+            eventName: event ? event.title : 'Event Ticket',
+            eventDate: event ? new Date(event.startDate).toLocaleString() : '',
+            eventLocation: event ? event.location : '',
+            ticketNumber: formattedTicketCode,
+            tierName: item.tierName,
+            qrCodeHash: qrCodeUrl,
+            ticketImageUrl: customImageUrl,
+            ticketImageBuffer,
+            ticketPdfBuffer,
+          });
+        } catch (emailErr) {
+          this.logger.error(`Failed to send ticket email to ${attendeeInfo.email}`, emailErr);
+        }
       }
     }
 
     if (tenant && tenant.notificationEmails && tenant.notificationEmails.length > 0) {
-      await this.resendService.sendOrderNotificationToAdmins({
-        emails: tenant.notificationEmails,
-        customerName: order.customerName,
-        customerEmail: order.customerEmail,
-        orderNumber: order.orderNumber,
-        totalAmount: orderTotalAmount,
-        eventName: 'Ticketr Event', // If you have event name logic here, we can improve it. But normally order has multiple items. We'll use the first event if available.
-        ticketDetails: ticketDetailsList.join('\n'),
-      });
+      try {
+        await this.resendService.sendOrderNotificationToAdmins({
+          emails: tenant.notificationEmails,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          orderNumber: order.orderNumber,
+          totalAmount: orderTotalAmount,
+          eventName: 'Ticketr Event', // If you have event name logic here, we can improve it. But normally order has multiple items. We'll use the first event if available.
+          ticketDetails: ticketDetailsList.join('\n'),
+        });
+      } catch (notifyErr) {
+        this.logger.error(`Failed to send order notification to admins for order ${order.orderNumber}`, notifyErr);
+      }
     }
 
     return {
