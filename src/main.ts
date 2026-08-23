@@ -52,6 +52,6 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  console.log(`🚀 Ticketr API running on port ${port} (Prefix: /api/v1)`);
+  console.log(`🚀 Ticketr API running on port ${port} (Prefix: /api/v1) [v2]`);
 }
 bootstrap();
