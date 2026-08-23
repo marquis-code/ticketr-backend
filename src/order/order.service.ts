@@ -623,7 +623,11 @@ export class OrderService {
         const ticketIndex = startTicketIndex + i;
 
         const attendeeInfo = item.attendees && item.attendees[i] 
-          ? item.attendees[i] 
+          ? {
+              name: item.attendees[i].name || order.customerName,
+              email: item.attendees[i].email || order.customerEmail,
+              departmentCode: item.attendees[i].departmentCode || order.departmentCode,
+            }
           : { name: order.customerName, email: order.customerEmail, departmentCode: order.departmentCode };
 
         const attendeeDepartment = attendeeInfo.departmentCode || order.departmentCode;
