@@ -778,15 +778,34 @@ export class OrderService {
   }
 
   async getOrdersByCustomerEmail(email: string) {
+    const normalizedEmail = email.toLowerCase();
+    
+    // Find all tickets that belong to this email
+    const attendeeTickets = await this.ticketModel.find({ attendeeEmail: normalizedEmail }).exec();
+    const orderIdsFromTickets = attendeeTickets.map(t => t.orderId);
+
+    // Find orders where they are either the customer OR they hold a ticket
     const orders = await this.orderModel
-      .find({ customerEmail: email.toLowerCase(), status: OrderStatus.PAID })
+      .find({
+        $or: [
+          { customerEmail: normalizedEmail },
+          { _id: { $in: orderIdsFromTickets } }
+        ],
+        status: OrderStatus.PAID
+      })
       .populate('eventId')
       .sort({ createdAt: -1 })
       .exec();
 
     return Promise.all(
       orders.map(async (o) => {
-        const tickets = await this.ticketModel.find({ orderId: o._id.toString() }).exec();
+        // Only return tickets that belong to the searcher, unless they are the buyer (then show all)
+        const isBuyer = o.customerEmail === normalizedEmail;
+        const tickets = await this.ticketModel.find({ 
+          orderId: o._id.toString(),
+          ...(isBuyer ? {} : { attendeeEmail: normalizedEmail }) 
+        }).exec();
+        
         return {
           ...o.toObject(),
           tickets,
