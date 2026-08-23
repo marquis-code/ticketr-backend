@@ -608,7 +608,15 @@ export class OrderService {
       ticketDetailsList.push(`- ${item.quantity}x ${item.tierName} (₦${item.subtotal.toLocaleString()})`);
       
       const tierDoc = await this.ticketTierModel.findById(item.tierId);
-      const ticketsToGenerate = tierDoc?.isCoupleTicket ? item.quantity * 2 : item.quantity;
+      let ticketsToGenerate = item.quantity;
+      if (tierDoc?.isCoupleTicket) {
+        ticketsToGenerate = item.quantity * 2;
+      } else if (tierDoc?.name) {
+        const match = tierDoc.name.match(/table\s+(?:of|for)?\s*(\d+)/i);
+        if (match) {
+          ticketsToGenerate = item.quantity * parseInt(match[1], 10);
+        }
+      }
 
       const updatedTierDoc = await this.ticketTierModel.findByIdAndUpdate(
         item.tierId,
@@ -622,13 +630,26 @@ export class OrderService {
       for (let i = 0; i < ticketsToGenerate; i++) {
         const ticketIndex = startTicketIndex + i;
 
-        const attendeeInfo = item.attendees && item.attendees[i] 
-          ? {
-              name: item.attendees[i].name || order.customerName,
-              email: item.attendees[i].email || order.customerEmail,
-              departmentCode: item.attendees[i].departmentCode || order.departmentCode,
-            }
-          : { name: order.customerName, email: order.customerEmail, departmentCode: order.departmentCode };
+        const baseName = item.attendees && item.attendees[i] && item.attendees[i].name 
+          ? item.attendees[i].name 
+          : order.customerName;
+
+        let attendeeName = baseName;
+        if (tierDoc?.isCoupleTicket) {
+          attendeeName = `${baseName} (${i % 2 === 0 ? 'Male' : 'Female'})`;
+        } else if (ticketsToGenerate > 1 && item.quantity === 1) {
+          attendeeName = `${baseName} (Guest ${i + 1})`;
+        } else if (ticketsToGenerate > item.quantity) {
+          // Fallback for multiple group tickets (e.g. 2 tables of 10)
+          const guestNum = (i % (ticketsToGenerate / item.quantity)) + 1;
+          attendeeName = `${baseName} (Guest ${guestNum})`;
+        }
+
+        const attendeeInfo = {
+          name: attendeeName,
+          email: item.attendees && item.attendees[i] ? item.attendees[i].email || order.customerEmail : order.customerEmail,
+          departmentCode: item.attendees && item.attendees[i] ? item.attendees[i].departmentCode || order.departmentCode : order.departmentCode,
+        };
 
         const attendeeDepartment = attendeeInfo.departmentCode || order.departmentCode;
 
