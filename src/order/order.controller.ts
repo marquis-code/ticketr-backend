@@ -146,6 +146,25 @@ export class OrderController {
     return result;
   }
 
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
+  @Post('admin/internal-ticket')
+  async createInternalTicket(@Request() req, @Body() body: any) {
+    if (!req.user.tenantId) {
+      throw new BadRequestException('User must belong to a tenant');
+    }
+    return this.orderService.createInternalOrder(req.user.userId, {
+      tenantId: req.user.tenantId,
+      eventId: body.eventId,
+      customerName: body.customerName,
+      customerEmail: body.customerEmail,
+      departmentCode: body.departmentCode,
+      reason: body.reason,
+      tierId: body.tierId,
+    });
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
   @Post('admin/:id/remind')
