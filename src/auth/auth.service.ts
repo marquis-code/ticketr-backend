@@ -124,7 +124,7 @@ export class AuthService {
 
   async forgotPassword(emailInput: string, origin?: string) {
     const email = emailInput.trim().toLowerCase();
-    const user = await this.userModel.findOne({ email }).populate('tenantId');
+    const user = await this.userModel.findOne({ email });
     if (!user) {
       // Return success anyway to prevent enumeration
       return { message: 'If the email exists, a reset link has been sent.' };
