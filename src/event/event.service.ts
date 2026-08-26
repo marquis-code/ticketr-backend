@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, isValidObjectId } from 'mongoose';
 import { Event, EventDocument, EventStatus, MarkupFeeType, MarkupStrategy } from '../schemas/event.schema';
 import { TicketTier, TicketTierDocument } from '../schemas/ticket-tier.schema';
 import { Tenant, TenantDocument } from '../schemas/tenant.schema';
@@ -182,8 +182,11 @@ export class EventService {
   }
 
   async getEventWithTiers(eventId: string, tenantId?: string) {
+    if (!isValidObjectId(eventId)) {
+      throw new BadRequestException('Invalid event ID');
+    }
     const event = await this.eventModel.findById(eventId);
-    if (!event || (tenantId && event.tenantId !== tenantId)) {
+    if (!event || (tenantId && event.tenantId.toString() !== tenantId.toString())) {
       throw new NotFoundException('Event not found');
     }
     const tiers = await this.ticketTierModel.find({ eventId }).exec();

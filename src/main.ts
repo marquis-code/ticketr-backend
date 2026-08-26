@@ -7,35 +7,7 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) {
-        return callback(null, true);
-      }
-      const allowedDomains = [
-        /^https?:\/\/localhost(:\d+)?$/,
-        /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
-        /^https?:\/\/ticketr\.org$/,
-        /^https?:\/\/www\.ticketr\.org$/,
-        /^https?:\/\/[a-zA-Z0-9-]+\.ticketr\.org$/, // all dynamic subdomains
-        /^https?:\/\/ticketr-admin\.onrender\.com$/,
-        /^https?:\/\/ticketr-superadmin\.onrender\.com$/,
-        'http://localhost:3001',
-        'http://localhost:3002',
-        'http://localhost:3003',
-        'http://localhost:3001/',
-        'http://localhost:3002/',
-        'http://localhost:3003/',
-      ];
-
-      const isAllowed = allowedDomains.some((domain) => 
-        domain instanceof RegExp ? domain.test(origin) : domain === origin
-      );
-      
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Not allowed by CORS: ${origin}`));
-      }
+      callback(null, true);
     },
     credentials: true,
   });
@@ -50,7 +22,7 @@ async function bootstrap() {
     }),
   );
 
-  const port = process.env.PORT || 3000;
+  const port = process.env.PORT || 3005;
   await app.listen(port);
   console.log(`🚀 Ticketr API running on port ${port} (Prefix: /api/v1) [v2]`);
 }
