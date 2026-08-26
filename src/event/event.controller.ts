@@ -62,6 +62,16 @@ export class EventController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
+  @Get(':id')
+  async getEventById(@Request() req, @Param('id') eventId: string) {
+    if (!req.user.tenantId) {
+      throw new BadRequestException('User must belong to an organization');
+    }
+    return this.eventService.getEventWithTiers(eventId, req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
   @Get(':id/attendees')
   async getEventAttendees(@Request() req, @Param('id') eventId: string) {
     if (!req.user.tenantId) {

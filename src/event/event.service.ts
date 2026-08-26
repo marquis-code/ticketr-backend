@@ -181,9 +181,9 @@ export class EventService {
     };
   }
 
-  async getEventWithTiers(eventId: string) {
+  async getEventWithTiers(eventId: string, tenantId?: string) {
     const event = await this.eventModel.findById(eventId);
-    if (!event) {
+    if (!event || (tenantId && event.tenantId !== tenantId)) {
       throw new NotFoundException('Event not found');
     }
     const tiers = await this.ticketTierModel.find({ eventId }).exec();
