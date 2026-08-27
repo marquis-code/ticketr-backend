@@ -15,6 +15,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { RedisModule } from './redis/redis.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AuditModule } from './audit/audit.module';
+import { CommunicationsModule } from './communications/communications.module';
 import { BullModule } from '@nestjs/bullmq';
 import { SeedService } from './seed.service';
 import { Tenant, TenantSchema } from './schemas/tenant.schema';
@@ -94,6 +95,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     TicketModule,
     AnalyticsModule,
     AuditModule,
+    CommunicationsModule,
   ],
   controllers: [AppController],
   providers: [
