@@ -55,7 +55,7 @@ export class CommunicationsService {
       </head>
       <body>
         <div class="card">
-          ${payload.message.replace(/\n/g, '<br/>')}
+          ${payload.message}
         </div>
         <div class="footer">
           Powered by Ticketr Admin
