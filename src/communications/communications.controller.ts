@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CommunicationsService } from './communications.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -16,12 +16,44 @@ export class CommunicationsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
-  @Post('broadcast')
-  async broadcast(@Request() req, @Body() body: any) {
-    return this.commsService.broadcastEmail({
-      tenantId: req.user.tenantId,
-      ...body
-    });
+  @Get()
+  async findAll(@Request() req) {
+    return this.commsService.findAll(req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
+  @Get(':id')
+  async findOne(@Request() req, @Param('id') id: string) {
+    return this.commsService.findOne(id, req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
+  @Post()
+  async create(@Request() req, @Body() body: any) {
+    return this.commsService.create(req.user.tenantId, body);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
+  @Put(':id')
+  async update(@Request() req, @Param('id') id: string, @Body() body: any) {
+    return this.commsService.update(id, req.user.tenantId, body);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
+  @Delete(':id')
+  async delete(@Request() req, @Param('id') id: string) {
+    return this.commsService.delete(id, req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
+  @Post(':id/send')
+  async send(@Request() req, @Param('id') id: string) {
+    return this.commsService.sendCommunication(id, req.user.tenantId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
