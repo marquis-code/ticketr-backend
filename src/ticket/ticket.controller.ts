@@ -81,4 +81,19 @@ export class TicketController {
   ) {
     return this.ticketService.resendTicketEmail(ticketId, body.newEmail);
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
+  @Post(':id/change-tier')
+  async changeTicketTier(
+    @Request() req,
+    @Param('id') ticketId: string,
+    @Body() body: { newTierId: string },
+  ) {
+    return this.ticketService.changeTicketTier(
+      ticketId,
+      body.newTierId,
+      req.user.userId,
+    );
+  }
 }

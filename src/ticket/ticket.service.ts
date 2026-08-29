@@ -4,6 +4,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Ticket, TicketDocument, TicketStatus } from '../schemas/ticket.schema';
 import { Event, EventDocument } from '../schemas/event.schema';
+import { TicketTier, TicketTierDocument } from '../schemas/ticket-tier.schema';
+import { Order, OrderDocument, OrderStatus } from '../schemas/order.schema';
 import { RedisService } from '../redis/redis.service';
 import { TicketGeneratorService } from '../ticket-generator/ticket-generator.service';
 import { ResendService } from '../resend/resend.service';
@@ -13,6 +15,8 @@ export class TicketService {
   constructor(
     @InjectModel(Ticket.name) private ticketModel: Model<TicketDocument>,
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
+    @InjectModel(TicketTier.name) private ticketTierModel: Model<TicketTierDocument>,
+    @InjectModel(Order.name) private orderModel: Model<OrderDocument>,
     private redisService: RedisService,
     private ticketGeneratorService: TicketGeneratorService,
     private resendService: ResendService,
@@ -298,6 +302,153 @@ export class TicketService {
       throw new BadRequestException('Internal server error while attempting to send ticket email');
     }
 
-    return ticket;
+  async changeTicketTier(ticketId: string, newTierId: string, adminUserId: string) {
+    const ticket = await this.ticketModel.findById(ticketId).populate('tenantId').exec();
+    if (!ticket) throw new NotFoundException('Ticket not found');
+    if (ticket.status !== TicketStatus.ISSUED) {
+      throw new BadRequestException('Only issued tickets can be modified');
+    }
+    
+    if (ticket.tierId.toString() === newTierId) {
+      throw new BadRequestException('Ticket is already of this tier');
+    }
+
+    const newTier = await this.ticketTierModel.findById(newTierId);
+    if (!newTier) throw new NotFoundException('New ticket tier not found');
+
+    const order = await this.orderModel.findById(ticket.orderId);
+    if (!order) throw new NotFoundException('Associated order not found');
+
+    const oldTierIdStr = ticket.tierId.toString();
+
+    // Find the item in the order
+    const itemIndex = order.items.findIndex(item => item.tierId.toString() === oldTierIdStr);
+    if (itemIndex === -1) {
+       throw new BadRequestException('Ticket tier not found in order items');
+    }
+
+    const oldItem = order.items[itemIndex];
+    const oldPrice = oldItem.unitPrice;
+    const newPrice = newTier.price;
+    const priceDiff = newPrice - oldPrice;
+
+    // Update old item
+    if (oldItem.quantity === 1) {
+      // Remove entirely, we will add new or merge
+      order.items.splice(itemIndex, 1);
+    } else {
+      oldItem.quantity -= 1;
+      oldItem.subtotal -= oldPrice;
+      if (oldItem.attendees && oldItem.attendees.length > 0) {
+        const attIndex = oldItem.attendees.findIndex(a => a.email === ticket.attendeeEmail && a.name === ticket.attendeeName);
+        if (attIndex !== -1) {
+          oldItem.attendees.splice(attIndex, 1);
+        } else {
+           oldItem.attendees.pop(); // just pop one
+        }
+      }
+    }
+
+    // Add or update new item in order
+    const newItemIndex = order.items.findIndex(item => item.tierId.toString() === newTierId);
+    if (newItemIndex !== -1) {
+      order.items[newItemIndex].quantity += 1;
+      order.items[newItemIndex].subtotal += newPrice;
+      if (order.items[newItemIndex].attendees) {
+        order.items[newItemIndex].attendees.push({
+          name: ticket.attendeeName || order.customerName,
+          email: ticket.attendeeEmail || order.customerEmail,
+          departmentCode: ticket.departmentCode
+        });
+      }
+    } else {
+      order.items.push({
+        tierId: newTierId,
+        tierName: newTier.name,
+        unitPrice: newPrice,
+        quantity: 1,
+        subtotal: newPrice,
+        attendees: [{
+          name: ticket.attendeeName || order.customerName,
+          email: ticket.attendeeEmail || order.customerEmail,
+          departmentCode: ticket.departmentCode
+        }]
+      });
+    }
+
+    // Update total amount
+    order.totalAmount += priceDiff;
+    if (order.amountRemaining !== undefined && order.amountPaid !== undefined) {
+      order.amountRemaining = order.totalAmount - order.amountPaid;
+      if (order.amountRemaining > 0) {
+        order.status = OrderStatus.PARTIALLY_PAID;
+      }
+      if (order.amountRemaining <= 0) {
+        order.status = OrderStatus.PAID;
+        order.amountRemaining = 0; 
+      }
+    }
+
+    order.updatedBy = adminUserId;
+    await order.save();
+
+    function generateStructuredTicketCode(
+      tierName: string,
+      ticketIndex: number,
+      departmentCode?: string,
+      tenantSlug?: string,
+    ): string {
+      let tierPrefix = 'R';
+      const name = tierName.toUpperCase();
+      if (name.includes('VVIP') || name.includes('VERY VIP')) tierPrefix = 'VV';
+      else if (name.includes('VIP')) tierPrefix = 'V';
+      else if (name.includes('REGULAR') || name.includes('STANDARD')) tierPrefix = 'R';
+      else if (name.includes('STUDENT')) tierPrefix = 'S';
+      else tierPrefix = tierName.split(' ').map((w) => w[0]).join('').toUpperCase().substring(0, 3) || 'R';
+      
+      const formattedIndex = ticketIndex < 10 ? `0${ticketIndex}` : `${ticketIndex}`;
+      const rawDept = departmentCode || tenantSlug || 'EDM';
+      const deptCode = rawDept.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || 'EDM';
+      return `${tierPrefix}/T${formattedIndex}/${deptCode}`;
+    }
+
+    let ticketIndex = 1;
+    const match = ticket.ticketNumber.match(/\/T(\d+)\//);
+    if (match) {
+      ticketIndex = parseInt(match[1], 10);
+    }
+
+    const tenant = ticket.tenantId as any;
+    const newTicketNumber = generateStructuredTicketCode(
+      newTier.name,
+      ticketIndex,
+      ticket.departmentCode,
+      tenant ? tenant.slug : 'EDM'
+    );
+
+    const newQrCodeHash = crypto
+      .createHash('sha256')
+      .update(`${order._id}-${newTicketNumber}-${Date.now()}-${Math.random()}-TIER_CHANGED`)
+      .digest('hex');
+
+    ticket.tierId = newTierId;
+    ticket.ticketNumber = newTicketNumber;
+    ticket.qrCodeHash = newQrCodeHash;
+    
+    await ticket.save();
+
+    // Resend email with new ticket
+    try {
+      await this.resendTicketEmail(ticket._id.toString());
+    } catch (e) {
+      console.error('Failed to send updated ticket email', e);
+    }
+
+    return {
+      success: true,
+      ticket,
+      orderStatus: order.status,
+      priceDifference: priceDiff
+    };
   }
 }
