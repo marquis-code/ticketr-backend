@@ -301,6 +301,7 @@ export class TicketService {
       await ticket.save();
       throw new BadRequestException('Internal server error while attempting to send ticket email');
     }
+  }
 
   async changeTicketTier(ticketId: string, newTierId: string, adminUserId: string) {
     const ticket = await this.ticketModel.findById(ticketId).populate('tenantId').exec();
