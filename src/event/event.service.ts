@@ -4,7 +4,7 @@ import { Model, isValidObjectId } from 'mongoose';
 import { Event, EventDocument, EventStatus, MarkupFeeType, MarkupStrategy } from '../schemas/event.schema';
 import { TicketTier, TicketTierDocument } from '../schemas/ticket-tier.schema';
 import { Tenant, TenantDocument } from '../schemas/tenant.schema';
-import { Ticket, TicketDocument } from '../schemas/ticket.schema';
+import { Ticket, TicketDocument, TicketStatus } from '../schemas/ticket.schema';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Injectable()
@@ -314,7 +314,7 @@ export class EventService {
     // Overall stats (not paginated, unfiltered except by eventId)
     const allTicketsForStats = await this.ticketModel.find({ eventId }).exec();
     const totalTickets = allTicketsForStats.length;
-    const checkedInCount = allTicketsForStats.filter(t => t.status === 'USED').length;
+    const checkedInCount = allTicketsForStats.filter(t => t.status === TicketStatus.CHECKED_IN).length;
 
     return {
       event: {
