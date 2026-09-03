@@ -100,14 +100,15 @@ export class EventController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('departmentCode') departmentCode?: string
   ) {
     if (!req.user.tenantId) {
       throw new BadRequestException('User must belong to an organization');
     }
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    return this.eventService.getEventAttendees(eventId, req.user.tenantId, pageNum, limitNum, search, status);
+    return this.eventService.getEventAttendees(eventId, req.user.tenantId, pageNum, limitNum, search, status, departmentCode);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

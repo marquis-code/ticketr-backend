@@ -284,7 +284,7 @@ export class EventService {
     };
   }
 
-  async getEventAttendees(eventId: string, tenantId: string, page: number = 1, limit: number = 20, search?: string, status?: string) {
+  async getEventAttendees(eventId: string, tenantId: string, page: number = 1, limit: number = 20, search?: string, status?: string, departmentCode?: string) {
     const event = await this.eventModel.findOne({ _id: eventId, tenantId });
     if (!event) {
       throw new NotFoundException('Event not found');
@@ -304,6 +304,10 @@ export class EventService {
       filter.status = status;
     }
 
+    if (departmentCode && departmentCode !== 'ALL') {
+      filter.departmentCode = departmentCode;
+    }
+
     const skip = (page - 1) * limit;
 
     const [tickets, totalCount] = await Promise.all([
@@ -315,6 +319,9 @@ export class EventService {
     const allTicketsForStats = await this.ticketModel.find({ eventId }).exec();
     const totalTickets = allTicketsForStats.length;
     const checkedInCount = allTicketsForStats.filter(t => t.status === TicketStatus.CHECKED_IN).length;
+    
+    const departments = Array.from(new Set(allTicketsForStats.map(t => t.departmentCode).filter(Boolean)));
+    const availableDepartments = ['ALL', ...departments.sort()];
 
     return {
       event: {
@@ -334,6 +341,7 @@ export class EventService {
             totalTickets,
             checkedInCount,
             pendingCount: totalTickets - checkedInCount,
+            availableDepartments,
           }
         }
       }
