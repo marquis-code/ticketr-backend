@@ -89,15 +89,28 @@ export class EventService {
     return this.getEventWithTiers(event._id.toString());
   }
 
-  async getEventsByTenantSlug(tenantSlug: string) {
+  async getEventsByTenantSlug(tenantSlug: string, page: number = 1, limit: number = 20, search?: string) {
     const tenant = await this.tenantModel.findOne({ slug: tenantSlug.toLowerCase() });
     if (!tenant) {
       throw new NotFoundException(`Tenant '${tenantSlug}' not found`);
     }
-    const events = await this.eventModel
-      .find({ tenantId: tenant._id.toString(), status: EventStatus.PUBLISHED })
-      .sort({ startDate: 1 })
-      .exec();
+
+    const filter: any = { tenantId: tenant._id.toString(), status: EventStatus.PUBLISHED };
+    if (search) {
+      filter.title = { $regex: search, $options: 'i' };
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [events, totalCount] = await Promise.all([
+      this.eventModel
+        .find(filter)
+        .sort({ startDate: 1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.eventModel.countDocuments(filter)
+    ]);
 
     const result = await Promise.all(
       events.map(async (ev) => {
@@ -118,15 +131,35 @@ export class EventService {
         primaryColor: tenant.primaryColor,
         secondaryColor: tenant.secondaryColor,
       },
-      events: result,
+      events: {
+        data: result,
+        metadata: {
+          total: totalCount,
+          page: Number(page),
+          limit: Number(limit),
+          lastPage: Math.ceil(totalCount / limit)
+        }
+      },
     };
   }
 
-  async getAllPublicEvents() {
-    const events = await this.eventModel
-      .find({ status: EventStatus.PUBLISHED })
-      .sort({ startDate: 1 })
-      .exec();
+  async getAllPublicEvents(page: number = 1, limit: number = 20, search?: string) {
+    const filter: any = { status: EventStatus.PUBLISHED };
+    if (search) {
+      filter.title = { $regex: search, $options: 'i' };
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [events, totalCount] = await Promise.all([
+      this.eventModel
+        .find(filter)
+        .sort({ startDate: 1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.eventModel.countDocuments(filter)
+    ]);
 
     const result = await Promise.all(
       events.map(async (ev) => {
@@ -144,7 +177,17 @@ export class EventService {
       }),
     );
 
-    return { events: result };
+    return { 
+      events: {
+        data: result,
+        metadata: {
+          total: totalCount,
+          page: Number(page),
+          limit: Number(limit),
+          lastPage: Math.ceil(totalCount / limit)
+        }
+      } 
+    };
   }
 
   async getEventBySlug(tenantSlug: string, eventSlug: string) {
@@ -196,9 +239,21 @@ export class EventService {
     };
   }
 
-  async getTenantEventsForAdmin(tenantId: string) {
-    const events = await this.eventModel.find({ tenantId }).sort({ createdAt: -1 }).exec();
-    return Promise.all(
+  async getTenantEventsForAdmin(tenantId: string, page: number = 1, limit: number = 20, search?: string) {
+    const filter: any = { tenantId };
+    
+    if (search) {
+      filter.title = { $regex: search, $options: 'i' };
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [events, totalCount] = await Promise.all([
+      this.eventModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.eventModel.countDocuments(filter)
+    ]);
+
+    const data = await Promise.all(
       events.map(async (ev) => {
         const tiers = await this.ticketTierModel.find({ eventId: ev._id.toString() }).exec();
         const totalCapacity = tiers.reduce((sum, t) => sum + t.capacity, 0);
@@ -211,15 +266,55 @@ export class EventService {
         };
       }),
     );
+
+    const activeEventsCount = await this.eventModel.countDocuments({ tenantId, status: EventStatus.PUBLISHED });
+    
+    return {
+      data,
+      metadata: {
+        total: totalCount,
+        page: Number(page),
+        limit: Number(limit),
+        lastPage: Math.ceil(totalCount / limit),
+        statistics: {
+          totalEvents: totalCount,
+          activeEvents: activeEventsCount
+        }
+      }
+    };
   }
 
-  async getEventAttendees(eventId: string, tenantId: string) {
+  async getEventAttendees(eventId: string, tenantId: string, page: number = 1, limit: number = 20, search?: string, status?: string) {
     const event = await this.eventModel.findOne({ _id: eventId, tenantId });
     if (!event) {
       throw new NotFoundException('Event not found');
     }
 
-    const tickets = await this.ticketModel.find({ eventId }).populate('tierId').sort({ createdAt: -1 }).exec();
+    const filter: any = { eventId };
+
+    if (search) {
+      filter.$or = [
+        { customerName: { $regex: search, $options: 'i' } },
+        { customerEmail: { $regex: search, $options: 'i' } },
+        { ticketCode: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    if (status && status !== 'ALL') {
+      filter.status = status;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [tickets, totalCount] = await Promise.all([
+      this.ticketModel.find(filter).populate('tierId').sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.ticketModel.countDocuments(filter)
+    ]);
+    
+    // Overall stats (not paginated, unfiltered except by eventId)
+    const allTicketsForStats = await this.ticketModel.find({ eventId }).exec();
+    const totalTickets = allTicketsForStats.length;
+    const checkedInCount = allTicketsForStats.filter(t => t.status === 'USED').length;
 
     return {
       event: {
@@ -228,7 +323,20 @@ export class EventService {
         startDate: event.startDate,
         location: event.location,
       },
-      attendees: tickets,
+      attendees: {
+        data: tickets,
+        metadata: {
+          total: totalCount,
+          page: Number(page),
+          limit: Number(limit),
+          lastPage: Math.ceil(totalCount / limit),
+          statistics: {
+            totalTickets,
+            checkedInCount,
+            pendingCount: totalTickets - checkedInCount,
+          }
+        }
+      }
     };
   }
 

@@ -823,12 +823,81 @@ export class OrderService {
     );
   }
 
-  async getTenantOrders(tenantId: string) {
-    return this.orderModel
-      .find({ tenantId })
-      .populate('eventId')
-      .sort({ createdAt: -1 })
-      .exec();
+  async getTenantOrders(
+    tenantId: string,
+    page: number = 1,
+    limit: number = 20,
+    status?: string,
+    departmentCode?: string
+  ) {
+    const filter: any = { tenantId };
+    
+    if (status && status !== 'ALL') {
+      if (status === 'AWAITING_APPROVAL') {
+        filter.status = { $in: [OrderStatus.AWAITING_APPROVAL, OrderStatus.PENDING] };
+      } else {
+        filter.status = status;
+      }
+    }
+    
+    if (departmentCode && departmentCode !== 'ALL') {
+      filter.departmentCode = departmentCode;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [data, totalCount, allOrdersForStats] = await Promise.all([
+      this.orderModel
+        .find(filter)
+        .populate('eventId')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.orderModel.countDocuments(filter),
+      this.orderModel.find({ tenantId }).exec() // Get all orders to calculate total stats
+    ]);
+    
+    // Calculate stats based on filter if applied, else all
+    let statsOrders = allOrdersForStats;
+    if (status || departmentCode) {
+       statsOrders = statsOrders.filter(o => {
+         let match = true;
+         if (status && status !== 'ALL') {
+           if (status === 'AWAITING_APPROVAL') match = match && ['AWAITING_APPROVAL', 'PENDING'].includes(o.status);
+           else match = match && o.status === status;
+         }
+         if (departmentCode && departmentCode !== 'ALL') {
+           match = match && o.departmentCode === departmentCode;
+         }
+         return match;
+       });
+    }
+
+    const totalPaidOrders = statsOrders.filter(o => o.status === OrderStatus.PAID).length;
+    const totalRevenue = statsOrders.filter(o => o.status === OrderStatus.PAID).reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const totalPending = statsOrders.filter(o => [OrderStatus.AWAITING_APPROVAL, OrderStatus.PENDING].includes(o.status)).length;
+    
+    // Calculate distinct departments
+    const departments = Array.from(new Set(allOrdersForStats.map(o => o.departmentCode).filter(Boolean)));
+    const availableDepartments = ['ALL', ...departments.sort()];
+
+    return {
+      data,
+      metadata: {
+        total: totalCount,
+        page: Number(page),
+        limit: Number(limit),
+        lastPage: Math.ceil(totalCount / limit),
+        statistics: {
+          totalOrders: statsOrders.length,
+          totalPaidOrders,
+          totalRevenue,
+          totalPending,
+          availableDepartments
+        }
+      }
+    };
   }
 
   async getAllOrdersSuperAdmin() {

@@ -80,11 +80,19 @@ export class OrderController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
   @Get('tenant')
-  async getTenantOrders(@Request() req) {
+  async getTenantOrders(
+    @Request() req,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('departmentCode') departmentCode?: string
+  ) {
     if (!req.user.tenantId) {
       throw new BadRequestException('User must belong to a tenant');
     }
-    return this.orderService.getTenantOrders(req.user.tenantId);
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.orderService.getTenantOrders(req.user.tenantId, pageNum, limitNum, status, departmentCode);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

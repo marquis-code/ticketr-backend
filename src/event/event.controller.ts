@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { EventService } from './event.service';
@@ -29,13 +30,26 @@ export class EventController {
   ) {}
 
   @Get('public/all')
-  async getAllPublicEvents() {
-    return this.eventService.getAllPublicEvents();
+  async getAllPublicEvents(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.eventService.getAllPublicEvents(pageNum, limitNum, search);
   }
 
   @Get('tenant/:tenantSlug')
-  async getTenantEvents(@Param('tenantSlug') tenantSlug: string) {
-    return this.eventService.getEventsByTenantSlug(tenantSlug);
+  async getTenantEvents(
+    @Param('tenantSlug') tenantSlug: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.eventService.getEventsByTenantSlug(tenantSlug, pageNum, limitNum, search);
   }
 
   @Get('tenant/:tenantSlug/:eventSlug')
@@ -53,11 +67,18 @@ export class EventController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
   @Get('admin/my-events')
-  async getMyEvents(@Request() req) {
+  async getMyEvents(
+    @Request() req,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string
+  ) {
     if (!req.user.tenantId) {
       throw new BadRequestException('User is not associated with any organization tenant');
     }
-    return this.eventService.getTenantEventsForAdmin(req.user.tenantId);
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.eventService.getTenantEventsForAdmin(req.user.tenantId, pageNum, limitNum, search);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -73,11 +94,20 @@ export class EventController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
   @Get(':id/attendees')
-  async getEventAttendees(@Request() req, @Param('id') eventId: string) {
+  async getEventAttendees(
+    @Request() req,
+    @Param('id') eventId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string
+  ) {
     if (!req.user.tenantId) {
       throw new BadRequestException('User must belong to an organization');
     }
-    return this.eventService.getEventAttendees(eventId, req.user.tenantId);
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.eventService.getEventAttendees(eventId, req.user.tenantId, pageNum, limitNum, search, status);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

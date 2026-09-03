@@ -25,16 +25,16 @@ export class SeedService implements OnModuleInit {
 
   async seedSuperAdmin() {
     try {
-      let superAdmin = await this.userModel.findOne({ email: 'superadmin@ticketr.org' });
+      let superAdmin = await this.userModel.findOne({ email: 'markeyz.code@gmail.com' });
       if (!superAdmin) {
         const hashedPassword = await bcrypt.hash('SuperAdmin123!', 10);
         superAdmin = await this.userModel.create({
           name: 'Ticketr Super Admin',
-          email: 'superadmin@ticketr.org',
+          email: 'markeyz.code@gmail.com',
           passwordHash: hashedPassword,
           role: UserRole.SUPER_ADMIN,
         });
-        this.logger.log('🔑 Seeded Super Admin: superadmin@ticketr.org');
+        this.logger.log('🔑 Seeded Super Admin: markeyz.code@gmail.com');
       }
     } catch (error) {
       this.logger.error('Error seeding Super Admin:', error);
