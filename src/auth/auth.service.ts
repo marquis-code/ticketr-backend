@@ -77,20 +77,20 @@ export class AuthService {
     }
 
     // Apply OTP for ORGANIZER and SUPER_ADMIN accounts
-    if (user.role === UserRole.ORGANIZER || user.role === UserRole.SUPER_ADMIN) {
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      user.otpSecret = otp;
-      user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-      await user.save();
-
-      await this.resendService.sendLoginOTPEmail(user.email, otp, user.name);
-
-      return {
-        requireOtp: true,
-        message: 'OTP sent to email',
-        email: user.email
-      };
-    }
+    // if (user.role === UserRole.ORGANIZER || user.role === UserRole.SUPER_ADMIN) {
+    //   const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    //   user.otpSecret = otp;
+    //   user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    //   await user.save();
+    //
+    //   await this.resendService.sendLoginOTPEmail(user.email, otp, user.name);
+    //
+    //   return {
+    //     requireOtp: true,
+    //     message: 'OTP sent to email',
+    //     email: user.email
+    //   };
+    // }
 
     return this.generateAuthResponse(user);
   }
