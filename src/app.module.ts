@@ -29,6 +29,7 @@ import { AppService } from './app.service';
 import { AuditInterceptor } from './audit/audit.interceptor';
 
 import { ScheduleModule } from '@nestjs/schedule';
+import { EmailLogModule } from './email-log/email-log.module';
 
 @Module({
   imports: [
@@ -96,6 +97,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AnalyticsModule,
     AuditModule,
     CommunicationsModule,
+    EmailLogModule,
   ],
   controllers: [AppController],
   providers: [

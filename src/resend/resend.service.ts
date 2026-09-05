@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import * as QRCode from 'qrcode';
+import { EmailLogService } from '../email-log/email-log.service';
+import { EmailStatus } from '../schemas/email-log.schema';
 
 @Injectable()
 export class ResendService {
@@ -9,7 +11,10 @@ export class ResendService {
   private resend: Resend;
   private fromEmail: string;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    @Inject(forwardRef(() => EmailLogService)) private emailLogService: EmailLogService,
+  ) {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
     this.resend = new Resend(apiKey || 're_mock');
     this.fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'Ticketr <tickets@ticketr.org>';
@@ -32,7 +37,16 @@ export class ResendService {
     ticketPdfBuffer?: Buffer;
     ticketImageBuffer?: Buffer;
   }) {
+    let logRecord: any;
     try {
+      const subject = `🎟️ Your Ticket for ${payload.eventName} - ${payload.ticketNumber}`;
+      logRecord = await this.emailLogService.createLog({
+        recipientEmail: payload.toEmail,
+        subject,
+        status: EmailStatus.PENDING,
+        metadata: { type: 'ticket', payload }
+      });
+
       const qrDataUri = await this.generateQRCodeDataUri(payload.qrCodeHash);
 
       // If we have the composited ticket image, use it as an inline CID image
@@ -96,6 +110,7 @@ export class ResendService {
 
       if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
         this.logger.log(`[MOCK EMAIL SENT] Ticket sent to ${payload.toEmail} for event ${payload.eventName}`);
+        await this.emailLogService.updateLogStatus(logRecord._id.toString(), EmailStatus.SENT);
         return { success: true, mock: true };
       }
 
@@ -120,7 +135,7 @@ export class ResendService {
       const { error } = await this.resend.emails.send({
         from: this.fromEmail,
         to: payload.toEmail,
-        subject: `🎟️ Your Ticket for ${payload.eventName} - ${payload.ticketNumber}`,
+        subject,
         html: htmlContent,
         attachments: attachments.length > 0 ? attachments : undefined,
       });
@@ -130,10 +145,14 @@ export class ResendService {
       }
 
       this.logger.log(`Email with PDF ticket dispatched to ${payload.toEmail}`);
+      await this.emailLogService.updateLogStatus(logRecord._id.toString(), EmailStatus.SENT);
       return { success: true };
     } catch (error) {
       this.logger.error(`Failed to send ticket email to ${payload.toEmail}`, error);
-      return { success: false, error: error.message };
+      if (logRecord) {
+        await this.emailLogService.updateLogStatus(logRecord._id.toString(), EmailStatus.FAILED, error.message);
+      }
+      throw error;
     }
   }
 
