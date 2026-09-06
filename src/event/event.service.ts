@@ -294,9 +294,9 @@ export class EventService {
 
     if (search) {
       filter.$or = [
-        { customerName: { $regex: search, $options: 'i' } },
-        { customerEmail: { $regex: search, $options: 'i' } },
-        { ticketCode: { $regex: search, $options: 'i' } }
+        { attendeeName: { $regex: search, $options: 'i' } },
+        { attendeeEmail: { $regex: search, $options: 'i' } },
+        { ticketNumber: { $regex: search, $options: 'i' } }
       ];
     }
     

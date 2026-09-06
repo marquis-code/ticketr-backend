@@ -1,13 +1,15 @@
+const { MongoClient } = require('mongodb');
 require('dotenv').config();
-const mongoose = require('mongoose');
 
-mongoose.connect(process.env.MONGODB_URI).then(async () => {
-  console.log('Connected to DB');
-  
-  const TicketTier = mongoose.model('TicketTier', new mongoose.Schema({}, { strict: false }));
-  const result = await TicketTier.updateMany({}, { $set: { soldCount: 0 } });
-  
-  console.log('Update result:', result);
-  
-  process.exit(0);
-});
+async function run() {
+  const client = new MongoClient(process.env.MONGODB_URI);
+  await client.connect();
+  const db = client.db();
+  console.log('Deleting email logs...');
+  // Delete all email logs older than 7 days, or just delete a huge chunk
+  // Because it's 519MB, it's better to just drop it or delete everything to restore service immediately.
+  const result = await db.collection('emaillogs').deleteMany({});
+  console.log(`Deleted ${result.deletedCount} email logs.`);
+  await client.close();
+}
+run();
