@@ -35,3 +35,4 @@ export class EmailLog extends Document {
 }
 
 export const EmailLogSchema = SchemaFactory.createForClass(EmailLog);
+EmailLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 604800 }); // 7 days
