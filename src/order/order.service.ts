@@ -397,7 +397,7 @@ export class OrderService {
       proofOfPaymentUrl = await this.cloudinaryService.uploadImage(file, 'ticketr/receipts');
     } catch (err) {
       console.warn('Cloudinary upload failed, falling back to mock receipt URL', err.message);
-      proofOfPaymentUrl = 'https://res.cloudinary.com/marquis/image/upload/v1723200000/ticketr/receipts/mock-receipt.png'; // Mock URL for testing offline
+      proofOfPaymentUrl = 'https://placehold.co/600x400?text=Mock+Receipt'; // Mock URL for testing offline
     }
     
     order.proofOfPaymentUrl = proofOfPaymentUrl;
@@ -450,7 +450,7 @@ export class OrderService {
         proofOfPaymentUrl = await this.cloudinaryService.uploadImage(file, 'ticketr/receipts');
       } catch (err) {
         console.warn('Cloudinary upload failed, falling back to mock receipt URL', err.message);
-        proofOfPaymentUrl = 'https://res.cloudinary.com/marquis/image/upload/v1723200000/ticketr/receipts/mock-receipt.png';
+        proofOfPaymentUrl = 'https://placehold.co/600x400?text=Mock+Receipt';
       }
     }
 
