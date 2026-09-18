@@ -81,7 +81,7 @@ export class ResendService {
         <body>
           <div class="card">
             <div class="header">
-              <img src="https://res.cloudinary.com/marquis/image/upload/v1786452024/ticketr_djxoz9.png" alt="Ticketr Logo" />
+              <img src="https://res.cloudinary.com/v6cmhap8/image/upload/v1789751565/logo.png" alt="Ticketr Logo" />
               <h1>🎟️ Your Event Ticket</h1>
               <p>Booking Confirmed</p>
             </div>
@@ -193,7 +193,7 @@ export class ResendService {
         <body>
           <div class="card">
             <div class="header">
-              <img src="https://res.cloudinary.com/marquis/image/upload/v1786452024/ticketr_djxoz9.png" alt="Ticketr Logo" />
+              <img src="https://res.cloudinary.com/v6cmhap8/image/upload/v1789751565/logo.png" alt="Ticketr Logo" />
               <h1>🔔 New Order Received</h1>
               <p>A new payment has been successfully processed</p>
             </div>
@@ -282,7 +282,7 @@ export class ResendService {
         <body>
           <div class="card">
             <div class="header">
-              <img src="https://res.cloudinary.com/marquis/image/upload/v1786452024/ticketr_djxoz9.png" alt="Ticketr Logo" />
+              <img src="https://res.cloudinary.com/v6cmhap8/image/upload/v1789751565/logo.png" alt="Ticketr Logo" />
               <h1>Action Required</h1>
               <p>Complete Your Booking</p>
             </div>
@@ -350,7 +350,7 @@ export class ResendService {
         <body>
           <div class="card">
             <div class="header">
-              <img src="https://res.cloudinary.com/marquis/image/upload/v1786452024/ticketr_djxoz9.png" alt="Ticketr Logo" />
+              <img src="https://res.cloudinary.com/v6cmhap8/image/upload/v1789751565/logo.png" alt="Ticketr Logo" />
               <h1>Secure Login</h1>
               <p>Your One-Time Password</p>
             </div>
@@ -412,7 +412,7 @@ export class ResendService {
         <body>
           <div class="card">
             <div class="header">
-              <img src="https://res.cloudinary.com/marquis/image/upload/v1786452024/ticketr_djxoz9.png" alt="Ticketr Logo" />
+              <img src="https://res.cloudinary.com/v6cmhap8/image/upload/v1789751565/logo.png" alt="Ticketr Logo" />
               <h1>Reset Password</h1>
               <p>Secure Account Recovery</p>
             </div>
