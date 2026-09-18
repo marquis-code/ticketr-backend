@@ -10,10 +10,11 @@ import {
   Request,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   BadRequestException,
   Query,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { EventService } from './event.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -149,6 +150,21 @@ export class EventController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
+  @Patch(':id/images')
+  @UseInterceptors(FilesInterceptor('images', 10))
+  async updateEventImages(
+    @Request() req,
+    @Param('id') eventId: string,
+    @UploadedFiles() files?: Express.Multer.File[],
+  ) {
+    if (!req.user.tenantId) {
+      throw new BadRequestException('User must belong to an organization');
+    }
+    return this.eventService.updateEventImages(eventId, req.user.tenantId, files);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
   @Patch(':id/details')
   async updateEventDetails(
     @Request() req,
@@ -232,11 +248,11 @@ export class EventController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
   @Post()
-  @UseInterceptors(FileInterceptor('banner'))
+  @UseInterceptors(FilesInterceptor('images', 10))
   async createEvent(
     @Request() req,
     @Body() body: any,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFiles() files?: Express.Multer.File[],
   ) {
     if (!req.user.tenantId) {
       throw new BadRequestException('User must belong to an organization to create events');
@@ -251,6 +267,15 @@ export class EventController {
       }
     } else if (Array.isArray(body.tiers)) {
       parsedTiers = body.tiers;
+    }
+
+    let parsedFormSettings = undefined;
+    if (body.formSettings) {
+      if (typeof body.formSettings === 'string') {
+        try { parsedFormSettings = JSON.parse(body.formSettings); } catch (e) {}
+      } else {
+        parsedFormSettings = body.formSettings;
+      }
     }
 
     return this.eventService.createEvent(
@@ -269,8 +294,10 @@ export class EventController {
         tags: body.tags ? (typeof body.tags === 'string' ? body.tags.split(',') : body.tags) : [],
         carouselImages: body.carouselImages ? (typeof body.carouselImages === 'string' ? JSON.parse(body.carouselImages) : body.carouselImages) : [],
         tiers: parsedTiers,
+        formSettings: parsedFormSettings,
+        qrCodeDelivery: body.qrCodeDelivery,
       },
-      file,
+      files,
     );
   }
 }

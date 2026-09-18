@@ -248,12 +248,14 @@ export class TicketService {
     
     const adminDomain = tenant && tenant.slug ? `admin-${tenant.slug}.ticketr.org` : 'admin.ticketr.org';
     const qrCodeUrl = `https://${adminDomain}/verify/${ticket.qrCodeHash}`;
+    const qrCodeDelivery = event?.qrCodeDelivery || 'STAMP_ON_TICKET';
+    
     let customImageUrl = tier?.templateImageUrl || '';
     
     let ticketImageBuffer: Buffer | undefined;
     let ticketPdfBuffer: Buffer | undefined;
 
-    if (customImageUrl) {
+    if (customImageUrl && qrCodeDelivery === 'STAMP_ON_TICKET') {
       try {
         ticketImageBuffer = await this.ticketGeneratorService.generateTicketImage({
           templateImageUrl: customImageUrl,
@@ -291,6 +293,7 @@ export class TicketService {
         ticketImageUrl: customImageUrl,
         ticketImageBuffer,
         ticketPdfBuffer,
+        qrCodeDelivery,
       });
       
       ticket.emailSent = true;

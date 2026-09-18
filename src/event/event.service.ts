@@ -39,12 +39,19 @@ export class EventService {
         capacity: number;
         maxPerPurchase?: number;
       }>;
+      formSettings?: any;
+      qrCodeDelivery?: string;
     },
-    bannerFile?: Express.Multer.File,
+    files?: Express.Multer.File[],
   ) {
     let bannerUrl: string | undefined;
-    if (bannerFile) {
-      bannerUrl = await this.cloudinaryService.uploadImage(bannerFile, 'ticketr/events');
+    let carouselImages: string[] = dto.carouselImages || [];
+    
+    if (files && files.length > 0) {
+      const uploadPromises = files.map(file => this.cloudinaryService.uploadImage(file, 'ticketr/events'));
+      const uploadedUrls = await Promise.all(uploadPromises);
+      bannerUrl = uploadedUrls[0];
+      carouselImages = [...carouselImages, ...uploadedUrls];
     }
 
     const cleanSlug = dto.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -65,9 +72,11 @@ export class EventService {
       checkInStart: dto.checkInStart,
       checkInEnd: dto.checkInEnd,
       tags: dto.tags || [],
-      status: EventStatus.DRAFT,
+      status: EventStatus.PUBLISHED,
       bannerUrl,
-      carouselImages: dto.carouselImages || [],
+      carouselImages,
+      formSettings: dto.formSettings || undefined,
+      qrCodeDelivery: dto.qrCodeDelivery || 'STAMP_ON_TICKET',
       createdBy: userId,
     });
 
@@ -376,6 +385,27 @@ export class EventService {
     return event;
   }
 
+  async updateEventImages(eventId: string, tenantId: string, files?: Express.Multer.File[]) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No image files provided');
+    }
+    const uploadPromises = files.map(f => this.cloudinaryService.uploadImage(f, 'ticketr/events'));
+    const uploadedUrls = await Promise.all(uploadPromises);
+
+    const event = await this.eventModel.findOne({ _id: eventId, tenantId });
+    if (!event) throw new NotFoundException('Event not found');
+
+    const newCarouselImages = [...(event.carouselImages || []), ...uploadedUrls];
+    const bannerUrl = event.bannerUrl || uploadedUrls[0];
+
+    const updatedEvent = await this.eventModel.findOneAndUpdate(
+      { _id: eventId, tenantId },
+      { bannerUrl, carouselImages: newCarouselImages },
+      { new: true },
+    );
+    return updatedEvent;
+  }
+
   async updateEventDetails(eventId: string, tenantId: string, body: any) {
     const updateData: any = {};
     if (body.title) updateData.title = body.title;
@@ -384,6 +414,8 @@ export class EventService {
     if (body.checkInStart) updateData.checkInStart = body.checkInStart;
     if (body.checkInEnd) updateData.checkInEnd = body.checkInEnd;
     if (body.carouselImages) updateData.carouselImages = body.carouselImages;
+    if (body.formSettings) updateData.formSettings = body.formSettings;
+    if (body.qrCodeDelivery) updateData.qrCodeDelivery = body.qrCodeDelivery;
 
     const event = await this.eventModel.findOneAndUpdate(
       { _id: eventId, tenantId },

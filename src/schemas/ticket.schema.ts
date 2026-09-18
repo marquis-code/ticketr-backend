@@ -29,6 +29,9 @@ export class Ticket {
   @Prop()
   departmentCode?: string;
 
+  @Prop({ type: Map, of: String })
+  customData?: Map<string, string>;
+
   @Prop()
   attendeeName?: string; // Optional for group tickets until claimed
 

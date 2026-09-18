@@ -26,6 +26,12 @@ export enum MarkupStrategy {
   DEDUCT_FROM_FEE = 'DEDUCT_FROM_FEE',
 }
 
+export enum QrCodeDeliveryStrategy {
+  STAMP_ON_TICKET = 'STAMP_ON_TICKET',
+  STANDALONE = 'STANDALONE',
+  NONE = 'NONE',
+}
+
 @Schema({ timestamps: true })
 export class Event {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Tenant', required: true, index: true })
@@ -100,6 +106,42 @@ export class Event {
     expiresAt?: Date;
     isActive?: boolean;
   }>;
+
+  @Prop({
+    type: {
+      requireDepartment: { type: Boolean, default: true },
+      departmentLabel: { type: String, default: 'Department / Association Code' },
+      departmentOptions: { type: [String], default: [] },
+      customFields: [{
+        name: { type: String, required: true },
+        label: { type: String, required: true },
+        type: { type: String, enum: ['text', 'select'], default: 'text' },
+        required: { type: Boolean, default: false },
+        options: { type: [String], default: [] }
+      }]
+    },
+    default: {
+      requireDepartment: true,
+      departmentLabel: 'Department / Association Code',
+      departmentOptions: [],
+      customFields: []
+    }
+  })
+  formSettings: {
+    requireDepartment: boolean;
+    departmentLabel: string;
+    departmentOptions: string[];
+    customFields: Array<{
+      name: string;
+      label: string;
+      type: 'text' | 'select';
+      required: boolean;
+      options: string[];
+    }>;
+  };
+
+  @Prop({ type: String, enum: QrCodeDeliveryStrategy, default: QrCodeDeliveryStrategy.STAMP_ON_TICKET })
+  qrCodeDelivery: QrCodeDeliveryStrategy;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
   createdBy: string;

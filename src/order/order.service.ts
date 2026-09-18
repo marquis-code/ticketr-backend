@@ -75,7 +75,7 @@ export class OrderService {
     isInstallmentPlan?: boolean;
     promoCode?: string;
     discountAmount?: number;
-    items: Array<{ tierId: string; quantity: number; attendees?: { name: string; email: string }[] }>;
+    items: Array<{ tierId: string; quantity: number; attendees?: { name: string; email: string; departmentCode?: string; customData?: Record<string, string> }[] }>;
     callbackUrl: string;
   }) {
     const event = await this.eventModel.findById(dto.eventId);
@@ -89,14 +89,7 @@ export class OrderService {
 
     let totalAmount = 0;
     let totalMarkupAmount = 0;
-    const orderItems: Array<{
-      tierId: string;
-      tierName: string;
-      unitPrice: number;
-      quantity: number;
-      subtotal: number;
-      attendees?: { name: string; email: string }[];
-    }> = [];
+    const orderItems: any[] = [];
 
     for (const item of dto.items) {
       const tier = await this.ticketTierModel.findById(item.tierId);
@@ -658,6 +651,7 @@ export class OrderService {
           name: attendeeName,
           email: item.attendees && item.attendees[i] ? item.attendees[i].email || order.customerEmail : order.customerEmail,
           departmentCode: item.attendees && item.attendees[i] ? item.attendees[i].departmentCode || order.departmentCode : order.departmentCode,
+          customData: item.attendees && item.attendees[i] && item.attendees[i].customData ? item.attendees[i].customData : {},
         };
 
         const attendeeDepartment = attendeeInfo.departmentCode || order.departmentCode;
@@ -682,6 +676,7 @@ export class OrderService {
           tierId: item.tierId,
           ticketNumber: formattedTicketCode,
           departmentCode: attendeeDepartment,
+          customData: attendeeInfo.customData,
           attendeeName: attendeeInfo.name,
           attendeeEmail: attendeeInfo.email,
           qrCodeHash,
@@ -697,8 +692,11 @@ export class OrderService {
         let ticketPdfBuffer: Buffer | undefined;
         let customImageUrl = tierDoc?.templateImageUrl || '';
         
-        // If template image exists, generate composited image & PDF
-        if (customImageUrl) {
+        // Check event QR delivery settings
+        const qrCodeDelivery = (event as any)?.qrCodeDelivery || 'STAMP_ON_TICKET';
+        
+        // If template image exists and we need a ticket (not NONE or STANDALONE), generate composited image & PDF
+        if (customImageUrl && qrCodeDelivery === 'STAMP_ON_TICKET') {
           try {
             ticketImageBuffer = await this.ticketGeneratorService.generateTicketImage({
               templateImageUrl: customImageUrl,
@@ -738,6 +736,7 @@ export class OrderService {
             ticketImageUrl: customImageUrl,
             ticketImageBuffer,
             ticketPdfBuffer,
+            qrCodeDelivery,
           });
           ticket.emailSent = true;
           await ticket.save();
@@ -928,7 +927,7 @@ export class OrderService {
     if (!tier || !tier.isActive) throw new BadRequestException(`Ticket tier is not available`);
 
     const subtotal = tier.price;
-    const orderItems = [{
+    const orderItems: any[] = [{
       tierId: tier._id.toString(),
       tierName: tier.name,
       unitPrice: tier.price,

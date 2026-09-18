@@ -28,8 +28,8 @@ export class OrderItem {
   @Prop({ required: true })
   subtotal: number;
 
-  @Prop({ type: [{ name: String, email: String, departmentCode: String }] })
-  attendees?: { name: string; email: string; departmentCode?: string }[];
+  @Prop({ type: [{ name: String, email: String, departmentCode: String, customData: { type: Map, of: String } }] })
+  attendees?: { name: string; email: string; departmentCode?: string; customData?: Map<string, string> }[];
 }
 
 @Schema({ timestamps: true })

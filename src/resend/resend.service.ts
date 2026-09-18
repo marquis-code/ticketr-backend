@@ -36,6 +36,7 @@ export class ResendService {
     ticketImageUrl?: string;
     ticketPdfBuffer?: Buffer;
     ticketImageBuffer?: Buffer;
+    qrCodeDelivery?: string;
   }) {
     let logRecord: any;
     try {
@@ -87,10 +88,12 @@ export class ResendService {
             <div class="body">
               <div class="greeting">Hi <strong>${payload.customerName}</strong>, your ticket for <strong>${payload.eventName}</strong> is confirmed and ready!</div>
               
+              ${payload.qrCodeDelivery !== 'NONE' ? `
               <div class="qr-container">
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payload.qrCodeHash)}" alt="Ticket QR Code" />
                 <p>Present this QR Code at gate entry</p>
               </div>
+              ` : ''}
 
               <table class="info-table">
                 <tr><td class="label">Event</td><td class="value">${payload.eventName}</td></tr>
