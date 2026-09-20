@@ -547,7 +547,21 @@ export class OrderService {
     }
 
     if (order.status === OrderStatus.PAID) {
-      return this.getOrderSummary(order._id.toString());
+      // CRITICAL: Check if tickets actually exist for this PAID order.
+      // If ticket generation previously failed/crashed after marking PAID, we must retry.
+      const existingTickets = await this.ticketModel.find({ orderId: order._id.toString() }).exec();
+      const expectedTicketCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+      
+      if (existingTickets.length >= expectedTicketCount) {
+        // Tickets exist and match expected count — truly fulfilled
+        return this.getOrderSummary(order._id.toString());
+      }
+      
+      // TICKETS ARE MISSING for a PAID order! Log critical warning and regenerate.
+      this.logger.error(
+        `CRITICAL: Order ${order.orderNumber} is PAID but has ${existingTickets.length}/${expectedTicketCount} tickets! Re-generating missing tickets...`
+      );
+      // Fall through to ticket generation below
     }
 
     let isSuccess = false;
@@ -568,23 +582,26 @@ export class OrderService {
       throw new BadRequestException('Payment was not completed successfully');
     }
 
-    let paymentAmount = order.totalAmount;
-    if (order.isInstallmentPlan) {
-      paymentAmount = order.totalAmount / 2;
-    }
+    // Only update payment status if not already PAID (handles retry case where tickets were missing)
+    if (order.status !== OrderStatus.PAID) {
+      let paymentAmount = order.totalAmount;
+      if (order.isInstallmentPlan) {
+        paymentAmount = order.totalAmount / 2;
+      }
 
-    order.amountPaid = (order.amountPaid || 0) + paymentAmount;
-    order.amountRemaining = order.totalAmount - order.amountPaid;
-    
-    if (order.amountRemaining > 0) {
-      order.status = OrderStatus.PARTIALLY_PAID;
-      order.nextPaymentDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days later
-    } else {
-      order.status = OrderStatus.PAID;
-      order.paidAt = new Date();
+      order.amountPaid = (order.amountPaid || 0) + paymentAmount;
+      order.amountRemaining = order.totalAmount - order.amountPaid;
+      
+      if (order.amountRemaining > 0) {
+        order.status = OrderStatus.PARTIALLY_PAID;
+        order.nextPaymentDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days later
+      } else {
+        order.status = OrderStatus.PAID;
+        order.paidAt = new Date();
+      }
+      
+      await order.save();
     }
-    
-    await order.save();
     
     // Only issue tickets if fully paid (or if you want to issue them partially paid, you can change this)
     if (order.status === OrderStatus.PARTIALLY_PAID) {
@@ -606,6 +623,10 @@ export class OrderService {
     const event = await this.eventModel.findById(order.eventId);
     const issuedTickets: any[] = [];
 
+    // Check which tickets already exist for this order (handles retry/re-generation)
+    const existingTicketsForOrder = await this.ticketModel.find({ orderId: order._id.toString() }).exec();
+    const existingTicketCount = existingTicketsForOrder.length;
+
     for (const item of order.items) {
       ticketDetailsList.push(`- ${item.quantity}x ${item.tierName} (₦${item.subtotal.toLocaleString()})`);
       
@@ -620,17 +641,34 @@ export class OrderService {
         }
       }
 
+      // Check how many tickets for this tier already exist (for retry safety)
+      const existingTierTickets = existingTicketsForOrder.filter(
+        t => t.tierId?.toString() === item.tierId?.toString()
+      );
+      const ticketsStillNeeded = ticketsToGenerate - existingTierTickets.length;
+
+      if (ticketsStillNeeded <= 0) {
+        // All tickets for this tier already exist (retry case) — skip generation
+        this.logger.log(`Skipping tier ${item.tierName}: all ${ticketsToGenerate} tickets already exist for order ${order.orderNumber}`);
+        issuedTickets.push(...existingTierTickets);
+        continue;
+      }
+
+      // Only increment soldCount for tickets we are actually creating now
       const updatedTierDoc = await this.ticketTierModel.findByIdAndUpdate(
         item.tierId,
-        { $inc: { soldCount: ticketsToGenerate } },
+        { $inc: { soldCount: ticketsStillNeeded } },
         { new: true },
       );
 
-      const currentSoldCount = updatedTierDoc ? updatedTierDoc.soldCount : ticketsToGenerate;
-      const startTicketIndex = currentSoldCount - ticketsToGenerate + 1;
+      const currentSoldCount = updatedTierDoc ? updatedTierDoc.soldCount : ticketsStillNeeded;
+      const startTicketIndex = currentSoldCount - ticketsStillNeeded + 1;
+      
+      // Offset loop to only generate the missing tickets
+      const loopStart = existingTierTickets.length;
 
-      for (let i = 0; i < ticketsToGenerate; i++) {
-        const ticketIndex = startTicketIndex + i;
+      for (let i = loopStart; i < ticketsToGenerate; i++) {
+        const ticketIndex = startTicketIndex + (i - loopStart);
 
         const baseName = item.attendees && item.attendees[i] && item.attendees[i].name 
           ? item.attendees[i].name 
@@ -746,6 +784,17 @@ export class OrderService {
           await ticket.save();
         }
       }
+    }
+
+    // POST-GENERATION VERIFICATION: Ensure all tickets were actually created
+    const finalTicketCount = await this.ticketModel.countDocuments({ orderId: order._id.toString() });
+    const totalExpected = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    if (finalTicketCount < totalExpected) {
+      this.logger.error(
+        `TICKET GENERATION INCOMPLETE: Order ${order.orderNumber} expected ${totalExpected} tickets but only ${finalTicketCount} were created. Manual intervention may be required.`
+      );
+    } else {
+      this.logger.log(`Order ${order.orderNumber} fulfilled successfully: ${finalTicketCount}/${totalExpected} tickets generated.`);
     }
 
     if (tenant && tenant.notificationEmails && tenant.notificationEmails.length > 0) {
