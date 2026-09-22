@@ -1,24 +1,25 @@
-require('dotenv').config();
-const mongoose = require('mongoose');
+const { MongoClient, ObjectId } = require('mongodb');
 
-async function run() {
-  await mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/ticketr-backend");
-  const db = mongoose.connection.db;
+async function main() {
+  const uri = "mongodb+srv://abahmarquis_db_user:Y7LjtjJtZrrm5qIV@ticketr.t0qfay8.mongodb.net/?appName=ticketr";
+  const client = new MongoClient(uri);
 
-  const orders = await db.collection("orders").find({ status: "PAID" }).toArray();
-  console.log(`Found ${orders.length} PAID orders:`);
-  for (let o of orders) {
-    console.log(`- ${o.customerName} (${o.orderNumber}): ${o.totalAmount}`);
-    console.log(`  Items:`, JSON.stringify(o.items));
+  try {
+    await client.connect();
+    const db = client.db('test');
+    
+    const tickets = await db.collection('tickets').find({
+      orderId: "6ab247c679fb91dc10d74af1"
+    }).toArray();
+    
+    console.log("Tickets for order 6ab247c679fb91dc10d74af1:");
+    console.log(JSON.stringify(tickets, null, 2));
+    
+  } catch (e) {
+    console.error(e);
+  } finally {
+    await client.close();
   }
-
-  const tickets = await db.collection("tickets").find({}).toArray();
-  console.log(`\nFound ${tickets.length} tickets:`);
-  for (let t of tickets) {
-    console.log(`- ${t.attendeeName} (${t.ticketNumber}): OrderID ${t.orderId}`);
-  }
-
-  process.exit(0);
 }
 
-run().catch(console.error);
+main().catch(console.error);

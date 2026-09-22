@@ -87,6 +87,10 @@ export class OrderService {
       throw new NotFoundException('Tenant not found');
     }
 
+    if (dto.items && dto.items.length > 1) {
+      throw new BadRequestException('Please purchase different ticket categories in separate orders to avoid payment merging.');
+    }
+
     let totalAmount = 0;
     let totalMarkupAmount = 0;
     const orderItems: any[] = [];
