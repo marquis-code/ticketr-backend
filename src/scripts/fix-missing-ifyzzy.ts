@@ -33,7 +33,7 @@ async function bootstrap() {
 
   // Find any other paid orders for this event that are missing tickets
   // Event ID for Party with ifyzzy: 6aac5961c38166ac1f4b0ddc (or we can just check recent orders)
-  const recentOrders = await orderModel.find({ status: OrderStatus.PAID }).sort({ createdAt: -1 }).limit(10).exec();
+  const recentOrders = await orderModel.find({ status: OrderStatus.PAID }).sort({ createdAt: -1 }).exec();
   for (const order of recentOrders) {
      if (!order.items) continue;
      const existingTickets = await ticketModel.find({ orderId: order._id.toString() }).exec();
