@@ -408,6 +408,8 @@ export class TicketService {
       else if (name.includes('VIP')) tierPrefix = 'V';
       else if (name.includes('REGULAR') || name.includes('STANDARD')) tierPrefix = 'R';
       else if (name.includes('STUDENT')) tierPrefix = 'S';
+      else if (name.includes('GUYS') || name.includes('GUY')) tierPrefix = 'GT';
+      else if (name.includes('GIRLS') || name.includes('GIRL')) tierPrefix = 'GRL';
       else tierPrefix = tierName.split(' ').map((w) => w[0]).join('').toUpperCase().substring(0, 3) || 'R';
       
       const formattedIndex = ticketIndex < 10 ? `0${ticketIndex}` : `${ticketIndex}`;

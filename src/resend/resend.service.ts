@@ -122,15 +122,15 @@ export class ResendService {
 
       if (payload.ticketPdfBuffer) {
         attachments.push({
-          filename: `Ticket-${payload.ticketNumber.replace(/\//g, '-')}.pdf`,
-          content: payload.ticketPdfBuffer,
+          filename: `Ticket-${payload.ticketNumber.replace(/[\\/]/g, '-')}.pdf`,
+          content: payload.ticketPdfBuffer.toString('base64'),
         });
       }
 
       if (payload.ticketImageBuffer) {
         attachments.push({
           filename: `ticket-image.png`,
-          content: payload.ticketImageBuffer,
+          content: payload.ticketImageBuffer.toString('base64'),
           content_id: ticketImageCid,
         });
       }

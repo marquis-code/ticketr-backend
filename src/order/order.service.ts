@@ -30,6 +30,10 @@ function generateStructuredTicketCode(
     tierPrefix = 'R';
   } else if (name.includes('STUDENT')) {
     tierPrefix = 'S';
+  } else if (name.includes('GUYS') || name.includes('GUY')) {
+    tierPrefix = 'GT';
+  } else if (name.includes('GIRLS') || name.includes('GIRL')) {
+    tierPrefix = 'GRL';
   } else {
     tierPrefix = tierName
       .split(' ')
