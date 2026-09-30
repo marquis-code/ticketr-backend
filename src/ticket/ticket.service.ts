@@ -23,7 +23,10 @@ export class TicketService {
   ) {}
 
   async verifyScan(inputToken: string, scannedByUserId: string, commit: boolean = true) {
-    let token = inputToken.trim();
+    if (!inputToken) {
+      throw new BadRequestException('QR code hash or ticket number is required');
+    }
+    let token = String(inputToken).trim();
     // Extract hash if the input is a full verification URL
     if (token.includes('/verify/')) {
       token = token.split('/verify/').pop() || token;
