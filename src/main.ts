@@ -19,7 +19,20 @@ async function bootstrap() {
     bodyParser: true,
   });
 
-  const allowedOrigins = (
+  const normalizeOrigin = (value: string): string => {
+    let origin = value.trim().replace(/^['"]|['"]$/g, '').replace(/\/+$/, '');
+    if (!origin || origin === '*') return origin;
+    if (origin.startsWith('//')) origin = `https:${origin}`;
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(origin)) origin = `https://${origin}`;
+    try {
+      const parsed = new URL(origin);
+      return `${parsed.protocol}//${parsed.host}`;
+    } catch {
+      return '';
+    }
+  };
+
+  const configuredOrigins = (
     process.env.CORS_ORIGINS ||
     [process.env.FRONTEND_URL, process.env.ADMIN_URL, process.env.SUPER_ADMIN_URL]
       .filter(Boolean)
@@ -27,39 +40,72 @@ async function bootstrap() {
     ''
   )
     .split(',')
-    .map((o) => o.trim().replace(/\/$/, ''))
-    .filter(Boolean);
+    .map(normalizeOrigin)
+    .filter((origin) => origin && origin !== '*');
 
-  if (process.env.NODE_ENV !== 'production') {
-    allowedOrigins.push('http://localhost:3002', 'http://localhost:3003', 'http://localhost:3004');
-  }
+  // A safe baseline for a multi-tenant ticketr deployment. Tenant storefronts
+  // are covered by the subdomain check below. Never fall back to `*` while
+  // credentialed CORS is enabled.
+  const allowedOrigins = Array.from(
+    new Set([
+      ...configuredOrigins,
+      'https://ticketr.org',
+      'https://www.ticketr.org',
+      'https://admin.ticketr.org',
+      'https://superadmin.ticketr.org',
+      ...(process.env.NODE_ENV !== 'production'
+        ? [
+            'http://localhost:3001',
+            'http://localhost:3002',
+            'http://localhost:3003',
+            'http://localhost:3004',
+            'http://127.0.0.1:3001',
+            'http://127.0.0.1:3002',
+            'http://127.0.0.1:3003',
+            'http://127.0.0.1:3004',
+          ]
+        : []),
+    ]),
+  );
 
   app.enableCors({
     origin: (origin, callback) => {
+      // SSR, curl, health checks and native clients send no Origin.
       if (!origin) return callback(null, true);
-      if (allowedOrigins.length === 0) {
-        // Fail closed in production rather than allowing credentialed any-origin.
-        return callback(
-          process.env.NODE_ENV === 'production'
-            ? new Error('CORS origins are not configured')
-            : null,
-          process.env.NODE_ENV !== 'production',
-        );
+
+      let originHost = '';
+      try {
+        const parsed = new URL(origin);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          return callback(null, false);
+        }
+        originHost = parsed.hostname.toLowerCase();
+      } catch {
+        return callback(null, false);
       }
+
       const isAllowed =
-        allowedOrigins.includes(origin) ||
+        allowedOrigins.includes(origin.replace(/\/+$/, '')) ||
         allowedOrigins.some((allowed) => {
           try {
-            const host = new URL(allowed).hostname.replace(/^www\./, '');
-            const originHost = new URL(origin).hostname;
-            return originHost === host || originHost.endsWith(`.${host}`);
+            const allowedHost = new URL(allowed).hostname
+              .toLowerCase()
+              .replace(/^www\./, '');
+            return (
+              originHost === allowedHost ||
+              (allowedHost === 'ticketr.org' && originHost.endsWith('.ticketr.org'))
+            );
           } catch {
             return false;
           }
         });
-      return callback(isAllowed ? null : new Error('Origin not allowed'), isAllowed);
+
+      // Never throw here: a rejected preflight must be a clean CORS rejection,
+      // not an unhandled 500 for the whole API.
+      return callback(null, isAllowed);
     },
     credentials: true,
+    optionsSuccessStatus: 204,
   });
 
   app.setGlobalPrefix('api/v1');
