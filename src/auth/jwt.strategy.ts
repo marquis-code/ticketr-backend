@@ -15,7 +15,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'super_secret_jwt_key_ticketr_2026_change_in_prod',
+      secretOrKey: (() => {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret) {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('JWT_SECRET is required in production');
+          }
+          return 'dev_only_ticketr_jwt_secret_change_me';
+        }
+        return secret;
+      })(),
     });
   }
 

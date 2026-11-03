@@ -6,6 +6,7 @@ import { Event, EventSchema } from '../schemas/event.schema';
 import { TicketTier, TicketTierSchema } from '../schemas/ticket-tier.schema';
 import { Tenant, TenantSchema } from '../schemas/tenant.schema';
 import { Ticket, TicketSchema } from '../schemas/ticket.schema';
+import { Order, OrderSchema } from '../schemas/order.schema';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { AuditModule } from '../audit/audit.module';
 
@@ -16,6 +17,7 @@ import { AuditModule } from '../audit/audit.module';
       { name: TicketTier.name, schema: TicketTierSchema },
       { name: Tenant.name, schema: TenantSchema },
       { name: Ticket.name, schema: TicketSchema },
+      { name: Order.name, schema: OrderSchema },
     ]),
     CloudinaryModule,
     AuditModule,

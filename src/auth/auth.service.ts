@@ -25,43 +25,81 @@ export class AuthService {
     tenantSlug?: string;
     organizationName?: string;
   }) {
-    const email = dto.email.trim().toLowerCase();
+    const email = (dto.email || '').trim().toLowerCase();
+    const name = (dto.name || '').trim();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      throw new BadRequestException('Please provide a valid email address');
+    }
+    if (name.length < 2 || name.length > 80) {
+      throw new BadRequestException('Please provide your full name');
+    }
+    this.assertStrongPassword(dto.password);
+
+    // SECURITY: never trust privileged roles from a public registration payload.
+    // Only CUSTOMER and ORGANIZER accounts can be self-created. Staff, super admins
+    // and additional organizers are invited by an existing tenant admin.
+    const requestedRole = dto.role;
+    if (requestedRole && ![UserRole.CUSTOMER, UserRole.ORGANIZER].includes(requestedRole)) {
+      throw new BadRequestException('This account type cannot be self-registered');
+    }
+
     const existing = await this.userModel.findOne({ email });
     if (existing) {
-      throw new BadRequestException('User with this email already exists');
+      throw new BadRequestException('An account with this email already exists. Please sign in instead.');
     }
 
     let tenantId: string | undefined;
 
-    if (dto.role === UserRole.ORGANIZER && dto.tenantSlug) {
-      let tenant = await this.tenantModel.findOne({ slug: dto.tenantSlug.toLowerCase() });
-      if (!tenant && dto.organizationName) {
-        tenant = await this.tenantModel.create({
-          name: dto.organizationName,
-          slug: dto.tenantSlug.toLowerCase(),
-          contactEmail: email,
-        });
+    if (requestedRole === UserRole.ORGANIZER) {
+      const organizationName = (dto.organizationName || '').trim();
+      const rawSlug = (dto.tenantSlug || organizationName).toLowerCase().trim();
+      const slug = rawSlug.replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+
+      if (!organizationName || organizationName.length < 2) {
+        throw new BadRequestException('Organization name is required to create an organizer account');
       }
-      if (tenant) {
-        tenantId = tenant._id.toString();
+      if (!slug || slug.length < 3) {
+        throw new BadRequestException('Organization handle must be at least 3 characters');
       }
-    } else if (dto.tenantSlug) {
-      const tenant = await this.tenantModel.findOne({ slug: dto.tenantSlug.toLowerCase() });
-      if (tenant) {
-        tenantId = tenant._id.toString();
+
+      // SECURITY: an organizer can only create a NEW organization. Joining an existing
+      // tenant by guessing its slug would grant access to another organizer's data.
+      const taken = await this.tenantModel.findOne({ slug });
+      if (taken) {
+        throw new BadRequestException('That organization handle is already taken. Please choose another.');
       }
+
+      const tenant = await this.tenantModel.create({
+        name: organizationName,
+        slug,
+        contactEmail: email,
+      });
+      tenantId = tenant._id.toString();
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.userModel.create({
-      name: dto.name,
+      name,
       email,
       passwordHash,
-      role: dto.role || UserRole.CUSTOMER,
+      role: requestedRole || UserRole.CUSTOMER,
       tenantId,
     });
 
     return this.generateAuthResponse(user);
+  }
+
+  private assertStrongPassword(password?: string) {
+    if (!password || password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters long');
+    }
+    if (password.length > 128) {
+      throw new BadRequestException('Password is too long');
+    }
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      throw new BadRequestException('Password must include at least one letter and one number');
+    }
   }
 
   async login(dto: { email: string; password: string }) {
@@ -74,6 +112,17 @@ export class AuthService {
     const isValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isValid) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('This account has been disabled. Please contact support.');
+    }
+
+    if (user.tenantId) {
+      const tenant = await this.tenantModel.findById(user.tenantId);
+      if (!tenant || tenant.status !== 'ACTIVE') {
+        throw new UnauthorizedException('This organization is not active. Please contact support.');
+      }
     }
 
     // Apply OTP for ORGANIZER and SUPER_ADMIN accounts
@@ -135,13 +184,40 @@ export class AuthService {
     user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
     await user.save();
 
-    const baseUrl = origin || process.env.FRONTEND_URL || 'http://localhost:3000';
+    // SECURITY: never build the reset link from an attacker-controlled Origin header.
+    // Only configured application origins are allowed, which prevents host-header
+    // poisoning from stealing password reset tokens.
+    const configured = [
+      process.env.FRONTEND_URL,
+      process.env.ADMIN_URL,
+      process.env.SUPER_ADMIN_URL,
+    ].filter(Boolean) as string[];
+
+    const allowedOrigins = new Set(
+      configured.map((u) => {
+        try { return new URL(u).origin; } catch { return ''; }
+      }).filter(Boolean),
+    );
+    if (process.env.NODE_ENV !== 'production') {
+      allowedOrigins.add('http://localhost:3002');
+      allowedOrigins.add('http://localhost:3003');
+      allowedOrigins.add('http://localhost:3004');
+    }
+
+    let baseUrl = process.env.FRONTEND_URL || configured[0] || 'http://localhost:3002';
+    if (origin) {
+      try {
+        const originUrl = new URL(origin);
+        if (allowedOrigins.has(originUrl.origin)) baseUrl = originUrl.origin;
+      } catch { /* ignore malformed origin */ }
+    }
+
     let path = '/reset-password';
     if (user.role === UserRole.ORGANIZER || user.role === UserRole.SUPER_ADMIN) {
       path = '/admin/reset-password';
     }
 
-    const resetLink = `${baseUrl}${path}?token=${token}`; 
+    const resetLink = `${baseUrl.replace(/\/+$/, '')}${path}?token=${token}`;
     await this.resendService.sendPasswordResetEmail(user.email, resetLink, user.name);
 
     return { message: 'If the email exists, a reset link has been sent.' };
@@ -157,7 +233,8 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired reset token');
     }
 
-    user.passwordHash = await bcrypt.hash(dto.password, 10);
+    this.assertStrongPassword(dto.password);
+    user.passwordHash = await bcrypt.hash(dto.password, 12);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
@@ -170,12 +247,47 @@ export class AuthService {
     if (!user) {
       throw new BadRequestException('User not found');
     }
+
+    const tenant = user.tenantId as any;
+    let tenantView: any = null;
+    if (tenant) {
+      const base = {
+        id: tenant._id?.toString(),
+        name: tenant.name,
+        slug: tenant.slug,
+        logoUrl: tenant.logoUrl,
+        primaryColor: tenant.primaryColor,
+        secondaryColor: tenant.secondaryColor,
+        contactEmail: tenant.contactEmail,
+        contactPhone: tenant.contactPhone,
+        status: tenant.status,
+        paymentMethod: tenant.paymentMethod,
+        notificationEmails: tenant.notificationEmails,
+        primaryRemittanceAccount: tenant.primaryRemittanceAccount,
+        remittanceAccount: tenant.remittanceAccount,
+        secondaryRemittanceAccount: tenant.secondaryRemittanceAccount,
+        customDomain: tenant.customDomain,
+      };
+      // Gate staff only need identity for the scanner/roster. Payout and
+      // integration credentials stay with organizers.
+      tenantView =
+        user.role === UserRole.STAFF || user.role === UserRole.CUSTOMER
+          ? {
+              id: tenant._id?.toString(),
+              name: tenant.name,
+              slug: tenant.slug,
+              logoUrl: tenant.logoUrl,
+              status: tenant.status,
+            }
+          : base;
+    }
+
     return {
       id: user._id.toString(),
       name: user.name,
       email: user.email,
       role: user.role,
-      tenant: user.tenantId,
+      tenant: tenantView,
     };
   }
 
@@ -184,7 +296,60 @@ export class AuthService {
     if (!organizer) {
       throw new BadRequestException('No organizer found for this tenant');
     }
-    return this.generateAuthResponse(organizer);
+    return { ...this.generateAuthResponse(organizer), impersonated: true };
+  }
+
+  async inviteTeamMember(tenantId: string, dto: { name: string; email: string; role: UserRole }) {
+    if (![UserRole.ORGANIZER, UserRole.STAFF].includes(dto.role)) {
+      throw new BadRequestException('Team members can only be organizers or gate staff');
+    }
+    const email = dto.email.trim().toLowerCase();
+    const existing = await this.userModel.findOne({ email });
+    if (existing) {
+      throw new BadRequestException('An account with this email already exists');
+    }
+    // Invitees receive a one-time password-reset style link to set their password.
+    const token = crypto.randomBytes(32).toString('hex');
+    const user = await this.userModel.create({
+      name: dto.name.trim(),
+      email,
+      passwordHash: await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 12),
+      role: dto.role,
+      tenantId,
+      resetPasswordToken: token,
+      resetPasswordExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
+    const baseUrl = process.env.ADMIN_URL || process.env.FRONTEND_URL || 'http://localhost:3003';
+    await this.resendService.sendPasswordResetEmail(
+      email,
+      `${baseUrl.replace(/\/+$/, '')}/reset-password?token=${token}`,
+      user.name,
+    );
+    return { id: user._id.toString(), name: user.name, email: user.email, role: user.role };
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new BadRequestException('User not found');
+    const valid = await bcrypt.compare(currentPassword || '', user.passwordHash);
+    if (!valid) throw new UnauthorizedException('Your current password is incorrect');
+    this.assertStrongPassword(newPassword);
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    await user.save();
+    return { message: 'Password updated successfully' };
+  }
+
+  async updateProfile(userId: string, dto: { name?: string; phone?: string }) {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new BadRequestException('User not found');
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (name.length < 2) throw new BadRequestException('Please provide your full name');
+      user.name = name;
+    }
+    await user.save();
+    return { id: user._id.toString(), name: user.name, email: user.email, role: user.role };
   }
 
   async getTenantUsers(tenantId: string) {

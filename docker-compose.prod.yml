@@ -42,6 +42,12 @@ services:
     env_file:
       - .env
     environment:
+      NODE_ENV: production
+      PORT: 3000
+      FRONTEND_URL: https://ticketr.org
+      ADMIN_URL: https://admin.ticketr.org
+      SUPER_ADMIN_URL: https://superadmin.ticketr.org
+      CORS_ORIGINS: https://ticketr.org,https://admin.ticketr.org,https://superadmin.ticketr.org
       REDIS_HOST: redis
       REDIS_PORT: 6379
     networks:

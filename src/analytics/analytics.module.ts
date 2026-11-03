@@ -7,6 +7,7 @@ import { Order, OrderSchema } from '../schemas/order.schema';
 import { Ticket, TicketSchema } from '../schemas/ticket.schema';
 import { Event, EventSchema } from '../schemas/event.schema';
 import { Tenant, TenantSchema } from '../schemas/tenant.schema';
+import { TicketTier, TicketTierSchema } from '../schemas/ticket-tier.schema';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { Tenant, TenantSchema } from '../schemas/tenant.schema';
       { name: Ticket.name, schema: TicketSchema },
       { name: Event.name, schema: EventSchema },
       { name: Tenant.name, schema: TenantSchema },
+      { name: TicketTier.name, schema: TicketTierSchema },
     ]),
     AuditModule,
   ],

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards, Req, BadRequestException } from '@nestjs/common';
 import { AuditService } from './audit.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -25,10 +25,15 @@ export class AuditController {
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
     
-    // Fallback to super admin query logic if needed in the future, for now it filters by req.user.tenantId
-    const tenantId = req.user.tenantId; 
-    
-    return this.auditService.getLogsForTenant(tenantId, pageNum, limitNum, {
+    if (!req.user.tenantId) {
+      // Super admins operate across tenants; give them the platform-wide trail.
+      if (req.user.role === UserRole.SUPER_ADMIN) {
+        return this.auditService.getAllLogs(pageNum, limitNum, { userId, action, entity, startDate, endDate });
+      }
+      throw new BadRequestException('Your account is not linked to an organization');
+    }
+
+    return this.auditService.getLogsForTenant(req.user.tenantId, pageNum, limitNum, {
       userId, action, entity, startDate, endDate
     });
   }

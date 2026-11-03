@@ -34,11 +34,39 @@ export class EventController {
   async getAllPublicEvents(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('tag') tag?: string,
+    @Query('includePast') includePast?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    return this.eventService.getAllPublicEvents(pageNum, limitNum, search);
+    return this.eventService.getAllPublicEvents(
+      pageNum,
+      limitNum,
+      search,
+      tag,
+      includePast === 'true',
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN, UserRole.STAFF)
+  @Get('tenant')
+  async getMyTenantEvents(
+    @Request() req,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+  ) {
+    if (!req.user.tenantId) throw new BadRequestException('User must belong to an organization');
+    return this.eventService.getTenantEventsForAdmin(
+      req.user.tenantId,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 100,
+      search,
+      status,
+    );
   }
 
   @Get('tenant/:tenantSlug')
@@ -46,11 +74,18 @@ export class EventController {
     @Param('tenantSlug') tenantSlug: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('includePast') includePast?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    return this.eventService.getEventsByTenantSlug(tenantSlug, pageNum, limitNum, search);
+    return this.eventService.getEventsByTenantSlug(
+      tenantSlug,
+      pageNum,
+      limitNum,
+      search,
+      includePast === 'true',
+    );
   }
 
   @Get('tenant/:tenantSlug/:eventSlug')
@@ -58,11 +93,19 @@ export class EventController {
     return this.eventService.getEventBySlug(tenantSlug, eventSlug);
   }
 
+  @Get('public/slug/:eventSlug')
+  async getPublicEventBySlug(@Param('eventSlug') eventSlug: string) {
+    return this.eventService.getPublicEventBySlug(eventSlug);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
   @Get('superadmin/all')
-  async getAllEventsSuperAdmin() {
-    return this.eventService.getAllEventsForSuperAdmin();
+  async getAllEventsSuperAdmin(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.eventService.getAllEventsForSuperAdmin(
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 50,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -83,7 +126,7 @@ export class EventController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ORGANIZER)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN, UserRole.STAFF)
   @Get(':id')
   async getEventById(@Request() req, @Param('id') eventId: string) {
     if (!req.user.tenantId) {
@@ -93,7 +136,7 @@ export class EventController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ORGANIZER)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN, UserRole.STAFF)
   @Get(':id/attendees')
   async getEventAttendees(
     @Request() req,
@@ -235,6 +278,18 @@ export class EventController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER)
+  @Delete(':id/tiers/:tierId')
+  async deleteTicketTier(
+    @Request() req,
+    @Param('id') eventId: string,
+    @Param('tierId') tierId: string,
+  ) {
+    if (!req.user.tenantId) throw new BadRequestException('User must belong to an organization');
+    return this.eventService.deleteTicketTier(eventId, tierId, req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER)
   @Delete(':id')
   async deleteEvent(@Request() req, @Param('id') eventId: string) {
     if (!req.user.tenantId) {
@@ -296,6 +351,11 @@ export class EventController {
         tiers: parsedTiers,
         formSettings: parsedFormSettings,
         qrCodeDelivery: body.qrCodeDelivery,
+        resaleEnabled: body.resaleEnabled === 'false' ? false : body.resaleEnabled === true || body.resaleEnabled === 'true' ? true : undefined,
+        resalePriceCapPercent: body.resalePriceCapPercent !== undefined ? Number(body.resalePriceCapPercent) : undefined,
+        transferPolicy: body.transferPolicy,
+        refundPolicy: body.refundPolicy,
+        status: body.status,
       },
       files,
     );

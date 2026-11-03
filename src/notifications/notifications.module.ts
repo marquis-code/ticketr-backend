@@ -8,6 +8,7 @@ import { CronService } from './cron.service';
 import { Order, OrderSchema } from '../schemas/order.schema';
 import { Event, EventSchema } from '../schemas/event.schema';
 import { ResendModule } from '../resend/resend.module';
+import { Tenant, TenantSchema } from '../schemas/tenant.schema';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ResendModule } from '../resend/resend.module';
     MongooseModule.forFeature([
       { name: Order.name, schema: OrderSchema },
       { name: Event.name, schema: EventSchema },
+      { name: Tenant.name, schema: TenantSchema },
     ]),
   ],
   providers: [FcmService, NotificationProducer, NotificationConsumer, CronService],

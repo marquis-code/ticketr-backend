@@ -27,17 +27,27 @@ export class NotificationConsumer extends WorkerHost {
     }
   }
 
+  private escapeHtml(value: unknown): string {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   private async handleEventReminder(data: any) {
     const { userEmail, fcmTokens, eventName, eventDate } = data;
     const formattedDate = new Date(eventDate).toLocaleString();
+    const safeName = this.escapeHtml(eventName);
 
     // 1. Send Email Reminder
     if (userEmail) {
       try {
         await this.resendService.sendEmail(
           userEmail,
-          `Reminder: ${eventName} is starting soon!`,
-          `<p>Hi there,</p><p>This is a reminder that <strong>${eventName}</strong> starts at ${formattedDate}.</p><p>We can't wait to see you there!</p>`,
+          `Reminder: ${String(eventName || 'your event').slice(0, 120)} is starting soon!`,
+          `<p>Hi there,</p><p>This is a reminder that <strong>${safeName}</strong> starts at ${this.escapeHtml(formattedDate)}.</p><p>We can't wait to see you there!</p>`,
         );
         this.logger.log(`Email reminder sent to ${userEmail}`);
       } catch (error) {

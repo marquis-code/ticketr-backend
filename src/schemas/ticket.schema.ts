@@ -56,6 +56,24 @@ export class Ticket {
   @Prop({ default: true })
   isResaleable: boolean;
 
+  @Prop({ default: 0, min: 0 })
+  transferCount: number;
+
+  @Prop()
+  lastTransferredAt?: Date;
+
+  @Prop()
+  originalAttendeeEmail?: string;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'ResaleListing' })
+  resaleListingId?: string;
+
+  @Prop({ default: 0, min: 0 })
+  scanCount: number;
+
+  @Prop({ default: false })
+  isComplimentary: boolean;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', index: true })
   currentOwnerId?: string; // Tracks transfers/resales
 

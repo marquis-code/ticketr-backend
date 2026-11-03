@@ -143,6 +143,25 @@ export class Event {
   @Prop({ type: String, enum: QrCodeDeliveryStrategy, default: QrCodeDeliveryStrategy.STAMP_ON_TICKET })
   qrCodeDelivery: QrCodeDeliveryStrategy;
 
+  @Prop({ default: true })
+  resaleEnabled: boolean;
+
+  /** Maximum resale price as a percentage of face value. 100 = never above face value. */
+  @Prop({ default: 100, min: 0, max: 100 })
+  resalePriceCapPercent: number;
+
+  @Prop({ default: 'Tickets can be transferred once to a new attendee. Transfers are verified in-platform.' })
+  transferPolicy: string;
+
+  @Prop({ default: 'All sales are final. In-platform verified resale is available while the event is upcoming.' })
+  refundPolicy: string;
+
+  @Prop()
+  venueMapUrl?: string;
+
+  @Prop({ default: 0 })
+  waitlistCount: number;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
   createdBy: string;
 

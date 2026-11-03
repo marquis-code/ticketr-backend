@@ -21,10 +21,18 @@ import { ResendModule } from '../resend/resend.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'super_secret_jwt_key_ticketr_2026_change_in_prod',
-        signOptions: { expiresIn: '7d' },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret) {
+          if (process.env.NODE_ENV === 'production') {
+            throw new Error('JWT_SECRET is required in production');
+          }
+        }
+        return {
+          secret: secret || 'dev_only_ticketr_jwt_secret_change_me',
+          signOptions: { expiresIn: (configService.get<string>('JWT_EXPIRATION') || '7d') as any },
+        };
+      },
     }),
   ],
   controllers: [AuthController],

@@ -31,6 +31,24 @@ export class ResaleListing {
 
   @Prop()
   soldAt?: Date;
+
+  @Prop()
+  buyerName?: string;
+
+  @Prop()
+  buyerEmail?: string;
+
+  @Prop({ index: true, sparse: true })
+  paymentReference?: string;
+
+  @Prop({ default: 0 })
+  sellerPayout?: number;
+
+  @Prop({ default: 0 })
+  platformFee?: number;
+
+  @Prop({ type: String, enum: ['PENDING', 'PAID', 'FAILED'], default: 'PENDING' })
+  paymentStatus?: 'PENDING' | 'PAID' | 'FAILED';
 }
 
 export const ResaleListingSchema = SchemaFactory.createForClass(ResaleListing);

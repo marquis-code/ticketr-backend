@@ -4,8 +4,15 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Order, OrderDocument, OrderStatus } from '../schemas/order.schema';
 import { Event, EventDocument } from '../schemas/event.schema';
+import { Tenant, TenantDocument } from '../schemas/tenant.schema';
 import { ResendService } from '../resend/resend.service';
+import { RedisService } from '../redis/redis.service';
 
+/**
+ * Scheduled attendee emails are claimed on the order before they are sent, and
+ * guarded by a Redis lock. That makes them idempotent per order — a restart,
+ * retry or second replica can never mail the same attendee twice.
+ */
 @Injectable()
 export class CronService {
   private readonly logger = new Logger(CronService.name);
@@ -13,110 +20,152 @@ export class CronService {
   constructor(
     @InjectModel(Order.name) private orderModel: Model<OrderDocument>,
     @InjectModel(Event.name) private eventModel: Model<EventDocument>,
+    @InjectModel(Tenant.name) private tenantModel: Model<TenantDocument>,
     private resendService: ResendService,
+    private redisService: RedisService,
   ) {}
 
-  // Run every 15 minutes to find abandoned carts
+  private checkoutUrl(tenant: TenantDocument | null, event: EventDocument | null) {
+    const frontend = (process.env.FRONTEND_URL || 'https://ticketr.org').replace(/\/+$/, '');
+    if (!tenant || !event) return frontend;
+    return `${frontend}/event/${event.slug}?tenant=${tenant.slug}`;
+  }
+
   @Cron('*/15 * * * *')
   async handleAbandonedCarts() {
-    this.logger.log('Checking for abandoned carts...');
-    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const lock = await this.redisService.acquireLock('cron:abandoned-carts', 14 * 60);
+    if (!lock) return;
 
-    // Find orders that are pending and were created between 30 mins and 1 hour ago
-    const abandonedOrders = await this.orderModel.find({
-      status: OrderStatus.PENDING,
-      createdAt: { $lte: thirtyMinutesAgo, $gte: oneHourAgo },
-    }).populate('eventId');
+    try {
+      const now = Date.now();
+      const abandonedOrders = await this.orderModel
+        .find({
+          status: OrderStatus.PENDING,
+          'reminders.abandonedAt': { $exists: false },
+          createdAt: {
+            $lte: new Date(now - 30 * 60 * 1000),
+            $gte: new Date(now - 24 * 60 * 60 * 1000),
+          },
+        })
+        .populate('eventId')
+        .limit(200);
 
-    for (const order of abandonedOrders) {
-      const event = order.eventId as any as EventDocument;
-      this.logger.log(`Sending abandoned cart email for order ${order.orderNumber}`);
-      
-      try {
-        await this.resendService.sendPaymentReminder({
-          toEmail: order.customerEmail,
-          customerName: order.customerName,
-          eventName: event ? event.title : 'Ticketr Event',
-          orderNumber: order.orderNumber,
-          checkoutUrl: `https://ticketr.org/${event?.slug || ''}`, // Replace with actual domain logic
-          customSubject: 'You left something behind! Complete your ticket purchase',
-          customMessage: 'Your tickets are still reserved. Complete your checkout before they are released!',
-        });
-        
-        // Optionally mark order as reminded in a real app to avoid duplicates
-      } catch (e) {
-        this.logger.error(`Failed to send abandoned cart email for ${order.orderNumber}`, e);
+      for (const order of abandonedOrders) {
+        // Claim first: atomic so concurrent replicas cannot both send.
+        const claimed = await this.orderModel.findOneAndUpdate(
+          { _id: order._id, 'reminders.abandonedAt': { $exists: false } },
+          { $set: { 'reminders.abandonedAt': new Date() } },
+          { new: true },
+        );
+        if (!claimed) continue;
+
+        const event = order.eventId as any as EventDocument;
+        const tenant = event ? await this.tenantModel.findById(event.tenantId) : null;
+
+        try {
+          await this.resendService.sendPaymentReminder({
+            toEmail: order.customerEmail,
+            customerName: order.customerName,
+            eventName: event ? event.title : 'Your event',
+            orderNumber: order.orderNumber,
+            checkoutUrl: this.checkoutUrl(tenant, event),
+            customSubject: 'Your tickets are still reserved',
+            customMessage:
+              'We are holding your seats for a little longer. Complete checkout before the reservation expires and your tickets are released.',
+          });
+        } catch (err) {
+          this.logger.error(`Abandoned cart email failed for ${order.orderNumber}`, err as any);
+          // Release the claim so the next run can retry.
+          await this.orderModel.updateOne(
+            { _id: order._id },
+            { $unset: { 'reminders.abandonedAt': '' } },
+          );
+        }
       }
+    } finally {
+      await this.redisService.releaseLock('cron:abandoned-carts');
     }
   }
 
-  // Run every hour to check for upcoming events (24h reminder)
   @Cron(CronExpression.EVERY_HOUR)
   async handleEventReminders() {
-    this.logger.log('Checking for upcoming events to send reminders...');
-    const now = new Date();
+    const lock = await this.redisService.acquireLock('cron:event-reminders', 55 * 60);
+    if (!lock) return;
 
-    // 24-hour window: events starting between 23h and 25h from now
-    const twentyThreeHoursFromNow = new Date(now.getTime() + 23 * 60 * 60 * 1000);
-    const twentyFiveHoursFromNow = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+    try {
+      const now = new Date();
 
-    const upcomingEvents24h = await this.eventModel.find({
-      startDate: { $gte: twentyThreeHoursFromNow, $lte: twentyFiveHoursFromNow },
-      status: 'PUBLISHED',
-    });
-
-    for (const event of upcomingEvents24h) {
-      const paidOrders = await this.orderModel.find({
-        eventId: event._id,
-        status: OrderStatus.PAID,
+      await this.remindWindow({
+        from: new Date(now.getTime() + 23 * 60 * 60 * 1000),
+        to: new Date(now.getTime() + 25 * 60 * 60 * 1000),
+        field: 'dayBeforeAt',
+        subject: (title) => `Tomorrow: ${title}`,
+        message: (order, event) =>
+          `Hi ${order.customerName}, ${event.title} is tomorrow at ${event.location}. Your QR ticket is in your Ticketr wallet — have it ready for a faster check-in.`,
       });
 
-      for (const order of paidOrders) {
-        try {
-          await this.resendService.sendPaymentReminder({
-            toEmail: order.customerEmail,
-            customerName: order.customerName,
-            eventName: event.title,
-            orderNumber: order.orderNumber,
-            checkoutUrl: `https://ticketr.org/event/${event.slug}`,
-            customSubject: `⏰ Reminder: ${event.title} is tomorrow!`,
-            customMessage: `Hey ${order.customerName}! Just a heads-up that ${event.title} is happening tomorrow at ${event.location}. Don't forget to bring your QR code ticket!`,
-          });
-        } catch (e) {
-          this.logger.error(`Failed to send 24h reminder for order ${order.orderNumber}`, e);
-        }
-      }
+      await this.remindWindow({
+        from: new Date(now.getTime() + 90 * 60 * 1000),
+        to: new Date(now.getTime() + 150 * 60 * 1000),
+        field: 'hoursBeforeAt',
+        subject: (title) => `${title} starts in 2 hours`,
+        message: (order, event) =>
+          `It's almost time! ${event.title} starts soon at ${event.location}. Open your wallet now so your QR code is ready at the gate.`,
+      });
+    } finally {
+      await this.redisService.releaseLock('cron:event-reminders');
     }
+  }
 
-    // 2-hour window: events starting between 1.5h and 2.5h from now
-    const ninetyMinutesFromNow = new Date(now.getTime() + 90 * 60 * 1000);
-    const twoAndHalfHoursFromNow = new Date(now.getTime() + 150 * 60 * 1000);
+  private async remindWindow(opts: {
+    from: Date;
+    to: Date;
+    field: 'dayBeforeAt' | 'hoursBeforeAt';
+    subject: (title: string) => string;
+    message: (order: OrderDocument, event: EventDocument) => string;
+  }) {
+    const events = await this.eventModel
+      .find({
+        startDate: { $gte: opts.from, $lte: opts.to },
+        status: 'PUBLISHED',
+      })
+      .limit(200);
 
-    const upcomingEvents2h = await this.eventModel.find({
-      startDate: { $gte: ninetyMinutesFromNow, $lte: twoAndHalfHoursFromNow },
-      status: 'PUBLISHED',
-    });
+    for (const event of events) {
+      const orders = await this.orderModel
+        .find({
+          eventId: event._id,
+          status: OrderStatus.PAID,
+          [`reminders.${opts.field}`]: { $exists: false },
+        })
+        .limit(500);
 
-    for (const event of upcomingEvents2h) {
-      const paidOrders = await this.orderModel.find({
-        eventId: event._id,
-        status: OrderStatus.PAID,
-      });
+      const tenant = await this.tenantModel.findById(event.tenantId);
 
-      for (const order of paidOrders) {
+      for (const order of orders) {
+        const claimed = await this.orderModel.findOneAndUpdate(
+          { _id: order._id, [`reminders.${opts.field}`]: { $exists: false } },
+          { $set: { [`reminders.${opts.field}`]: new Date() } },
+          { new: true },
+        );
+        if (!claimed) continue;
+
         try {
-          await this.resendService.sendPaymentReminder({
+          await this.resendService.sendAttendeeReminder({
             toEmail: order.customerEmail,
             customerName: order.customerName,
             eventName: event.title,
-            orderNumber: order.orderNumber,
-            checkoutUrl: `https://ticketr.org/event/${event.slug}`,
-            customSubject: `🎉 ${event.title} starts in 2 hours!`,
-            customMessage: `It's almost time! ${event.title} is starting very soon at ${event.location}. Make sure you have your QR code ready for check-in.`,
+            eventDate: new Date(event.startDate).toLocaleString(),
+            eventLocation: event.location,
+            subject: opts.subject(event.title),
+            message: opts.message(order, event),
           });
-        } catch (e) {
-          this.logger.error(`Failed to send 2h reminder for order ${order.orderNumber}`, e);
+        } catch (err) {
+          this.logger.error(`Reminder failed for ${order.orderNumber}`, err as any);
+          await this.orderModel.updateOne(
+            { _id: order._id },
+            { $unset: { [`reminders.${opts.field}`]: '' } },
+          );
         }
       }
     }

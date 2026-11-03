@@ -3,9 +3,15 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { TenantService } from './tenant.service';
 import { TenantController } from './tenant.controller';
 import { Tenant, TenantSchema } from '../schemas/tenant.schema';
+import { User, UserSchema } from '../schemas/user.schema';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: Tenant.name, schema: TenantSchema }])],
+  imports: [
+    MongooseModule.forFeature([
+      { name: Tenant.name, schema: TenantSchema },
+      { name: User.name, schema: UserSchema },
+    ]),
+  ],
   controllers: [TenantController],
   providers: [TenantService],
   exports: [TenantService],

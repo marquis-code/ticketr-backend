@@ -28,14 +28,25 @@ export class AuditService {
     }
   }
 
+  async getAllLogs(
+    page = 1,
+    limit = 50,
+    filters?: { userId?: string; action?: string; entity?: string; startDate?: string; endDate?: string },
+  ) {
+    return this.getLogsForTenant(undefined as any, page, limit, filters);
+  }
+
   async getLogsForTenant(
-    tenantId: string, 
-    page = 1, 
-    limit = 50, 
+    tenantId: string,
+    page = 1,
+    limit = 50,
     filters?: { userId?: string, action?: string, entity?: string, startDate?: string, endDate?: string }
   ) {
+    page = Math.max(1, Number(page) || 1);
+    limit = Math.min(200, Math.max(1, Number(limit) || 50));
     const skip = (page - 1) * limit;
-    const query: any = { tenantId };
+    const query: any = {};
+    if (tenantId) query.tenantId = tenantId;
     
     if (filters?.userId) query.userId = filters.userId;
     if (filters?.action) query.action = filters.action;
@@ -43,12 +54,14 @@ export class AuditService {
     
     if (filters?.startDate || filters?.endDate) {
       query.createdAt = {};
-      if (filters.startDate) query.createdAt.$gte = new Date(filters.startDate);
-      if (filters.endDate) {
-        const end = new Date(filters.endDate);
-        end.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = end;
+      const start = filters.startDate ? new Date(filters.startDate) : null;
+      const endDate = filters.endDate ? new Date(filters.endDate) : null;
+      if (start && !isNaN(start.getTime())) query.createdAt.$gte = start;
+      if (endDate && !isNaN(endDate.getTime())) {
+        endDate.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = endDate;
       }
+      if (Object.keys(query.createdAt).length === 0) delete query.createdAt;
     }
 
     const [logs, total] = await Promise.all([
@@ -60,6 +73,6 @@ export class AuditService {
         .exec(),
       this.auditLogModel.countDocuments(query)
     ]);
-    return { logs, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return { logs, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
   }
 }

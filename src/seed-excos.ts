@@ -62,7 +62,7 @@ async function bootstrap() {
   for (const exco of excos) {
     console.log(`Processing order for ${exco.name}...`);
     try {
-      const orderRes = await orderService.createOrder({
+      const orderRes: any = await orderService.createOrder({
         tenantId: tenant._id.toString(),
         eventId: event._id.toString(),
         customerName: exco.name,

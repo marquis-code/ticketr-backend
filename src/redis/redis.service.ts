@@ -89,6 +89,29 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     } catch (e) {}
   }
 
+  /**
+   * Best-effort distributed lock. Returns true only for the caller that
+   * created the lock, so cron jobs do not double-send across replicas.
+   */
+  async acquireLock(key: string, ttlSeconds = 300): Promise<boolean> {
+    if (!this.isConnected || !this.client) return true; // single instance / redis down
+    try {
+      const result = await this.client.set(`lock:${key}`, '1', 'EX', ttlSeconds, 'NX');
+      return result === 'OK';
+    } catch {
+      return true;
+    }
+  }
+
+  async releaseLock(key: string): Promise<void> {
+    if (!this.isConnected || !this.client) return;
+    try {
+      await this.client.del(`lock:${key}`);
+    } catch {
+      /* ignore */
+    }
+  }
+
   // Gate Scan Verification Caching (Cache checked-in tickets for ultra-fast <1ms validation)
   async cacheTicketScan(qrHash: string, ticketData: any): Promise<void> {
     await this.set(`ticket:scan:${qrHash}`, ticketData, 86400); // 24hr cache

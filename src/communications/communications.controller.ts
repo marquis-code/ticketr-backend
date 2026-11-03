@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Request, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CommunicationsService } from './communications.service';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -17,8 +17,19 @@ export class CommunicationsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
   @Get()
-  async findAll(@Request() req) {
-    return this.commsService.findAll(req.user.tenantId);
+  async findAll(@Request() req, @Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.commsService.findAll(
+      req.user.tenantId,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 50,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
+  @Get(':id/preview-recipients')
+  async previewRecipients(@Request() req, @Param('id') id: string) {
+    return this.commsService.previewRecipients(id, req.user.tenantId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -52,8 +63,12 @@ export class CommunicationsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ORGANIZER, UserRole.SUPER_ADMIN)
   @Post(':id/send')
-  async send(@Request() req, @Param('id') id: string) {
-    return this.commsService.sendCommunication(id, req.user.tenantId);
+  async send(
+    @Request() req,
+    @Param('id') id: string,
+    @Body('force') force?: boolean,
+  ) {
+    return this.commsService.sendCommunication(id, req.user.tenantId, { force: !!force });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -61,6 +76,7 @@ export class CommunicationsController {
   @Post('upload-image')
   @UseInterceptors(FileInterceptor('image'))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No image uploaded');
     const url = await this.cloudinaryService.uploadImage(file, 'communications');
     return { success: true, url };
   }

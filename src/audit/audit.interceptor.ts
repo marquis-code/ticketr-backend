@@ -11,13 +11,19 @@ export class AuditInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest();
     const { method, originalUrl, user, body, params, query, ip } = request;
 
-    // We only care about tracking authenticated users.
-    if (!user || !user.tenantId) {
+    // Audit authenticated users, including super admins (whose actions matter most).
+    if (!user || !user.userId) {
       return next.handle();
     }
 
-    // Exclude the client audit route to prevent infinite loops / noise
+    // Exclude the client audit route to prevent infinite loops / noise.
     if (originalUrl.includes('/audit/client') || originalUrl.includes('/audit?page')) {
+      return next.handle();
+    }
+
+    // Reads do not belong in a security trail. Logging every GET buried the
+    // actions that actually matter and wrote megabytes of noise.
+    if (method === 'GET') {
       return next.handle();
     }
 
@@ -51,7 +57,7 @@ export class AuditInterceptor implements NestInterceptor {
             entity,
             entityId: params.id || 'N/A',
             userId: user.userId,
-            tenantId: user.tenantId.toString(),
+            tenantId: user.tenantId ? user.tenantId.toString() : undefined,
             details: {
               method,
               query,
@@ -67,8 +73,8 @@ export class AuditInterceptor implements NestInterceptor {
             action: `${action}_FAILED`,
             entity,
             entityId: params.id || 'N/A',
-            userId: user._id.toString(),
-            tenantId: user.tenantId.toString(),
+            userId: user.userId,
+            tenantId: user.tenantId ? user.tenantId.toString() : undefined,
             details: {
               method,
               error: err.message,
@@ -81,11 +87,43 @@ export class AuditInterceptor implements NestInterceptor {
     );
   }
 
+  private readonly sensitiveKeys = [
+    'password',
+    'confirmPassword',
+    'currentPassword',
+    'newPassword',
+    'token',
+    'accessToken',
+    'refreshToken',
+    'walletToken',
+    'resetPasswordToken',
+    'otp',
+    'otpSecret',
+    'secret',
+    'apiKey',
+    'authorization',
+    'receipt',
+    'qrCodeHash',
+  ];
+
   private sanitizeBody(body: any) {
-    if (!body) return null;
-    const sanitized = { ...body };
-    if (sanitized.password) sanitized.password = '[REDACTED]';
-    if (sanitized.confirmPassword) sanitized.confirmPassword = '[REDACTED]';
-    return sanitized;
+    if (!body || typeof body !== 'object') return null;
+    const walk = (value: any, depth = 0): any => {
+      if (depth > 4) return '[TRUNCATED]';
+      if (Array.isArray(value)) return value.slice(0, 20).map((v) => walk(v, depth + 1));
+      if (value && typeof value === 'object') {
+        if (Buffer.isBuffer(value)) return '[FILE]';
+        const out: any = {};
+        for (const [key, val] of Object.entries(value)) {
+          if (this.sensitiveKeys.includes(key)) out[key] = '[REDACTED]';
+          else if (key === 'buffer') out[key] = '[FILE]';
+          else out[key] = walk(val, depth + 1);
+        }
+        return out;
+      }
+      if (typeof value === 'string' && value.length > 500) return `${value.slice(0, 500)}…`;
+      return value;
+    };
+    return walk(body);
   }
 }

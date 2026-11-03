@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -30,28 +31,66 @@ import { AuditInterceptor } from './audit/audit.interceptor';
 
 import { ScheduleModule } from '@nestjs/schedule';
 import { EmailLogModule } from './email-log/email-log.module';
+import { PayoutModule } from './payout/payout.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([
+      { name: 'default', ttl: 60_000, limit: 120 },
+    ]),
     ConfigModule.forRoot({
       isGlobal: true,
+      validate: (config: Record<string, any>) => {
+        if (config.NODE_ENV === 'production') {
+          const required = ['MONGODB_URI', 'JWT_SECRET', 'PAYSTACK_SECRET_KEY', 'RESEND_API_KEY'];
+          const missing = required.filter((key) => !config[key]);
+          if (missing.length > 0) {
+            throw new Error(`Missing required production configuration: ${missing.join(', ')}`);
+          }
+          if (
+            config.JWT_SECRET === 'super_secret_jwt_key_ticketr_2026_change_in_prod' ||
+            String(config.JWT_SECRET).length < 32
+          ) {
+            throw new Error('JWT_SECRET must be a unique value of at least 32 characters');
+          }
+          // Localhost links in production silently break ticket emails and wallet
+          // access. Fail fast instead of shipping unusable tickets.
+          const frontendUrl = String(config.FRONTEND_URL || '');
+          if (!frontendUrl || /localhost|127\.0\.0\.1/.test(frontendUrl)) {
+            throw new Error('FRONTEND_URL must be a public URL in production');
+          }
+        }
+        return config;
+      },
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
-        let uri = configService.get<string>('MONGODB_URI');
-        if (!uri || uri.includes('localhost:27017')) {
-          try {
-            const mongod = await MongoMemoryServer.create();
-            uri = mongod.getUri();
-            console.log(`🍃 Embedded MongoDB Memory Server started at ${uri}`);
-          } catch (e) {
-            console.warn(`MongoMemoryServer notice: ${e.message}, defaulting to Mongo URI.`);
-            uri = uri || 'mongodb://localhost:27017/ticketr_db';
+        const uri = configService.get<string>('MONGODB_URI');
+        const isProduction = process.env.NODE_ENV === 'production';
+
+        // NEVER silently boot an ephemeral in-memory database in production:
+        // that turns every write into data loss on the next deploy.
+        if (!uri) {
+          if (isProduction) {
+            throw new Error(
+              'MONGODB_URI is required in production. Refusing to start with an in-memory database.',
+            );
           }
+          const mongod = await MongoMemoryServer.create();
+          const memoryUri = mongod.getUri();
+          console.warn(`🍃 No MONGODB_URI set — using throwaway in-memory Mongo at ${memoryUri}`);
+          return { uri: memoryUri };
         }
+
+        if (isProduction && /localhost:27017|127\.0\.0\.1:27017/.test(uri)) {
+          throw new Error(
+            'MONGODB_URI points at localhost in production. Refusing to start to avoid data loss.',
+          );
+        }
+
         return { uri };
       },
     }),
@@ -76,10 +115,7 @@ import { EmailLogModule } from './email-log/email-log.module';
             password: password || undefined,
             maxRetriesPerRequest: null,
             enableReadyCheck: false,
-            retryStrategy: (times) => {
-              if (times > 2) return null;
-              return 1000;
-            },
+            retryStrategy: (times) => Math.min(1000 * times, 15000),
           },
         };
       },
@@ -98,11 +134,16 @@ import { EmailLogModule } from './email-log/email-log.module';
     AuditModule,
     CommunicationsModule,
     EmailLogModule,
+    PayoutModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     SeedService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor,

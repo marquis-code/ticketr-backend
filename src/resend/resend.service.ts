@@ -16,8 +16,26 @@ export class ResendService {
     @Inject(forwardRef(() => EmailLogService)) private emailLogService: EmailLogService,
   ) {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
+    // A mock key silently "succeeds" without sending. In production that means
+    // paying customers never receive tickets, so refuse to start.
+    if (process.env.NODE_ENV === 'production' && (!apiKey || apiKey.startsWith('re_mock'))) {
+      throw new Error('RESEND_API_KEY is required in production (mock mode is disabled)');
+    }
     this.resend = new Resend(apiKey || 're_mock');
     this.fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'Ticketr <tickets@ticketr.org>';
+  }
+
+  private escapeHtml(value: unknown): string {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  private isMock(): boolean {
+    return !!this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock');
   }
 
   async generateQRCodeDataUri(hash: string): Promise<string> {
@@ -37,16 +55,19 @@ export class ResendService {
     ticketPdfBuffer?: Buffer;
     ticketImageBuffer?: Buffer;
     qrCodeDelivery?: string;
-  }) {
+    walletUrl?: string;
+  }, options: { skipLog?: boolean } = {}) {
     let logRecord: any;
     try {
-      const subject = `🎟️ Your Ticket for ${payload.eventName} - ${payload.ticketNumber}`;
-      logRecord = await this.emailLogService.createLog({
-        recipientEmail: payload.toEmail,
-        subject,
-        status: EmailStatus.PENDING,
-        metadata: { type: 'ticket', payload }
-      });
+      const subject = `Your ticket for ${payload.eventName} — ${payload.ticketNumber}`;
+      if (!options.skipLog) {
+        logRecord = await this.emailLogService.createLog({
+          recipientEmail: payload.toEmail,
+          subject,
+          status: EmailStatus.PENDING,
+          metadata: { type: 'ticket', payload }
+        });
+      }
 
       const qrDataUri = await this.generateQRCodeDataUri(payload.qrCodeHash);
 
@@ -86,22 +107,26 @@ export class ResendService {
               <p>Booking Confirmed</p>
             </div>
             <div class="body">
-              <div class="greeting">Hi <strong>${payload.customerName}</strong>, your ticket for <strong>${payload.eventName}</strong> is confirmed and ready!</div>
+              <div class="greeting">Hi <strong>${this.escapeHtml(payload.customerName)}</strong>, your ticket for <strong>${this.escapeHtml(payload.eventName)}</strong> is confirmed and ready!</div>
               
               ${payload.qrCodeDelivery !== 'NONE' ? `
               <div class="qr-container">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(payload.qrCodeHash)}" alt="Ticket QR Code" />
+                <img src="${qrDataUri}" width="220" height="220" alt="Ticket QR Code" />
                 <p>Present this QR Code at gate entry</p>
               </div>
               ` : ''}
 
               <table class="info-table">
-                <tr><td class="label">Event</td><td class="value">${payload.eventName}</td></tr>
-                <tr><td class="label">Date</td><td class="value">${payload.eventDate}</td></tr>
-                <tr><td class="label">Venue</td><td class="value">${payload.eventLocation}</td></tr>
-                <tr><td class="label">Ticket Type</td><td class="value">${payload.tierName}</td></tr>
-                <tr><td class="label">Ticket No.</td><td class="value">${payload.ticketNumber}</td></tr>
+                <tr><td class="label">Event</td><td class="value">${this.escapeHtml(payload.eventName)}</td></tr>
+                <tr><td class="label">Date</td><td class="value">${this.escapeHtml(payload.eventDate)}</td></tr>
+                <tr><td class="label">Venue</td><td class="value">${this.escapeHtml(payload.eventLocation)}</td></tr>
+                <tr><td class="label">Ticket Type</td><td class="value">${this.escapeHtml(payload.tierName)}</td></tr>
+                <tr><td class="label">Ticket No.</td><td class="value">${this.escapeHtml(payload.ticketNumber)}</td></tr>
               </table>
+              ${payload.walletUrl ? `<div style="text-align:center;margin-top:24px">
+                <a href="${payload.walletUrl}" style="display:inline-block;background:#0F4D3F;color:#fff;text-decoration:none;padding:14px 28px;border-radius:12px;font-weight:600">Open my ticket wallet</a>
+                <p style="font-size:12px;color:#94a3b8;margin-top:10px">This private link is the key to your tickets. Do not forward this email.</p>
+              </div>` : ''}
             </div>
             <div class="footer">
               Powered by <strong>Ticketr</strong> | <a href="https://www.ticketr.org">www.ticketr.org</a>
@@ -111,9 +136,14 @@ export class ResendService {
         </html>
       `;
 
-      if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
-        this.logger.log(`[MOCK EMAIL SENT] Ticket sent to ${payload.toEmail} for event ${payload.eventName}`);
-        await this.emailLogService.updateLogStatus(logRecord._id.toString(), EmailStatus.SENT);
+      if (this.isMock()) {
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error('Email provider is in mock mode — refusing to mark a ticket as delivered');
+        }
+        this.logger.log(`[MOCK EMAIL] Ticket queued for ${payload.toEmail} (${payload.eventName})`);
+        if (logRecord) {
+          await this.emailLogService.updateLogStatus(logRecord._id.toString(), EmailStatus.SENT);
+        }
         return { success: true, mock: true };
       }
 
@@ -147,8 +177,10 @@ export class ResendService {
         throw new Error(error.message);
       }
 
-      this.logger.log(`Email with PDF ticket dispatched to ${payload.toEmail}`);
-      await this.emailLogService.updateLogStatus(logRecord._id.toString(), EmailStatus.SENT);
+      this.logger.log(`Ticket email dispatched to ${payload.toEmail}`);
+      if (logRecord) {
+        await this.emailLogService.updateLogStatus(logRecord._id.toString(), EmailStatus.SENT);
+      }
       return { success: true };
     } catch (error) {
       this.logger.error(`Failed to send ticket email to ${payload.toEmail}`, error);
@@ -200,15 +232,15 @@ export class ResendService {
             <div class="body">
               <div class="info-row">
                 <div class="label">Event</div>
-                <div class="value">${payload.eventName}</div>
+                <div class="value">${this.escapeHtml(payload.eventName)}</div>
               </div>
               <div class="info-row">
                 <div class="label">Order No.</div>
-                <div class="value">${payload.orderNumber}</div>
+                <div class="value">${this.escapeHtml(payload.orderNumber)}</div>
               </div>
               <div class="info-row">
                 <div class="label">Customer</div>
-                <div class="value">${payload.customerName} (${payload.customerEmail})</div>
+                <div class="value">${this.escapeHtml(payload.customerName)} (${this.escapeHtml(payload.customerEmail)})</div>
               </div>
               <div class="info-row">
                 <div class="label">Total Paid</div>
@@ -216,7 +248,7 @@ export class ResendService {
               </div>
               <div class="info-row">
                 <div class="label">Tickets</div>
-                <div class="value" style="white-space: pre-wrap; font-weight: 500;">${payload.ticketDetails}</div>
+                <div class="value" style="white-space: pre-wrap; font-weight: 500;">${this.escapeHtml(payload.ticketDetails)}</div>
               </div>
             </div>
             <div class="footer">
@@ -227,15 +259,15 @@ export class ResendService {
         </html>
       `;
 
-      if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
-        this.logger.log(`[MOCK EMAIL SENT] Notification sent to ${payload.emails.join(', ')} for order ${payload.orderNumber}`);
+      if (this.isMock()) {
+        this.logger.log(`[MOCK EMAIL] Admin notification for order ${payload.orderNumber}`);
         return { success: true, mock: true };
       }
 
       const { error } = await this.resend.emails.send({
         from: this.fromEmail,
         to: payload.emails,
-        subject: `🔔 New Order: ₦${payload.totalAmount.toLocaleString()} - ${payload.eventName}`,
+        subject: `New order: ₦${payload.totalAmount.toLocaleString()} — ${payload.eventName}`,
         html: htmlContent,
       });
       
@@ -288,12 +320,12 @@ export class ResendService {
             </div>
             <div class="body">
               <div class="greeting">
-                ${payload.customMessage 
-                  ? payload.customMessage 
-                  : `Hi <strong>${payload.customerName}</strong>,<br/><br/>We noticed you started booking a ticket for <strong>${payload.eventName}</strong> but didn't finish. Secure your spot now before tickets run out!`}
+                ${payload.customMessage
+                  ? this.escapeHtml(payload.customMessage).replace(/\n/g, '<br/>')
+                  : `Hi <strong>${this.escapeHtml(payload.customerName)}</strong>,<br/><br/>We noticed you started booking a ticket for <strong>${this.escapeHtml(payload.eventName)}</strong> but didn't finish. Secure your spot now before tickets run out!`}
               </div>
               <a href="${payload.checkoutUrl}" class="cta-button">Complete Payment</a>
-              <p style="margin-top: 20px; font-size: 14px; color: #6b7280;">Order No: ${payload.orderNumber}</p>
+              <p style="margin-top: 20px; font-size: 14px; color: #6b7280;">Order No: ${this.escapeHtml(payload.orderNumber)}</p>
             </div>
             <div class="footer">
               Powered by <strong>Ticketr</strong> | <a href="https://www.ticketr.org">www.ticketr.org</a>
@@ -303,8 +335,8 @@ export class ResendService {
         </html>
       `;
 
-      if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
-        this.logger.log(`[MOCK EMAIL SENT] Reminder sent to ${payload.toEmail} for order ${payload.orderNumber}`);
+      if (this.isMock()) {
+        this.logger.log(`[MOCK EMAIL] Reminder queued for order ${payload.orderNumber}`);
         return { success: true, mock: true };
       }
 
@@ -369,15 +401,15 @@ export class ResendService {
         </html>
       `;
 
-      if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
-        this.logger.log(`[MOCK EMAIL SENT] OTP sent to ${toEmail}: ${otp}`);
+      if (this.isMock()) {
+        this.logger.log(`[MOCK EMAIL] Login OTP generated for ${toEmail}`);
         return { success: true, mock: true };
       }
 
       const { error } = await this.resend.emails.send({
         from: this.fromEmail,
         to: toEmail,
-        subject: `Your Ticketr Login OTP: ${otp}`,
+        subject: 'Your Ticketr login verification code',
         html: htmlContent,
       });
       if (error) throw new Error(error.message);
@@ -385,6 +417,101 @@ export class ResendService {
     } catch (error) {
       this.logger.error(`Failed to send OTP to ${toEmail}`, error);
       return { success: false, error: error.message };
+    }
+  }
+
+  /** Reminder for people who already hold tickets (paid or part-paid). */
+  async sendAttendeeReminder(payload: {
+    toEmail: string;
+    customerName: string;
+    eventName: string;
+    eventDate: string;
+    eventLocation: string;
+    subject: string;
+    message: string;
+  }) {
+    const frontend = (process.env.FRONTEND_URL || 'https://ticketr.org').replace(/\/+$/, '');
+    const html = `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:auto;background:#F6F5EF;padding:32px 16px;color:#0A1F1A">
+        <div style="background:#fff;border:1px solid #E4E4DA;border-radius:20px;overflow:hidden">
+          <div style="background:#0A1F1A;color:#F6F5EF;padding:28px 32px">
+            <p style="margin:0;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#D8F26B;font-weight:700">Event reminder</p>
+            <h1 style="margin:8px 0 0;font-size:24px;line-height:1.2">${this.escapeHtml(payload.eventName)}</h1>
+            <p style="margin:8px 0 0;color:rgba(246,245,239,.65);font-size:13px">${this.escapeHtml(payload.eventDate)} · ${this.escapeHtml(payload.eventLocation)}</p>
+          </div>
+          <div style="padding:28px 32px;font-size:15px;line-height:1.7;color:#37514A">
+            <p style="margin:0 0 16px">Hi <strong>${this.escapeHtml(payload.customerName)}</strong>,</p>
+            <p style="margin:0">${this.escapeHtml(payload.message).replace(/\n/g, '<br/>')}</p>
+            <div style="text-align:center;margin-top:28px">
+              <a href="${frontend}/my-tickets" style="display:inline-block;background:#11483A;color:#fff;text-decoration:none;padding:14px 26px;border-radius:12px;font-weight:600">Open my ticket wallet</a>
+            </div>
+            <p style="margin:22px 0 0;font-size:12px;color:#7A857F">Your QR pass is private to your email. Do not forward it.</p>
+          </div>
+        </div>
+      </div>`;
+    if (this.isMock()) {
+      this.logger.log(`[MOCK EMAIL] Attendee reminder queued for ${payload.toEmail}`);
+      return { success: true, mock: true };
+    }
+    try {
+      const { error } = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: payload.toEmail,
+        subject: payload.subject,
+        html,
+      });
+      if (error) throw new Error(error.message);
+      return { success: true };
+    } catch (error: any) {
+      this.logger.error(`Attendee reminder failed for ${payload.toEmail}`, error);
+      return { success: false, error: error?.message };
+    }
+  }
+
+  async sendRefundEmail(payload: {
+    toEmail: string;
+    customerName: string;
+    eventName: string;
+    orderNumber: string;
+    amount: number;
+    reason: string;
+    reference: string;
+  }) {
+    const html = `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:auto;background:#F6F5EF;padding:32px 16px;color:#0A1F1A">
+        <div style="background:#fff;border:1px solid #E4E4DA;border-radius:20px;overflow:hidden">
+          <div style="background:#0A1F1A;color:#F6F5EF;padding:28px 32px">
+            <p style="margin:0;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#D8F26B;font-weight:700">Refund processed</p>
+            <h1 style="margin:8px 0 0;font-size:24px;line-height:1.2">₦${payload.amount.toLocaleString()}</h1>
+          </div>
+          <div style="padding:28px 32px;font-size:15px;line-height:1.7;color:#37514A">
+            <p style="margin:0 0 16px">Hi <strong>${this.escapeHtml(payload.customerName)}</strong>,</p>
+            <p style="margin:0 0 16px">We refunded <strong>₦${payload.amount.toLocaleString()}</strong> for <strong>${this.escapeHtml(payload.eventName)}</strong> (order ${this.escapeHtml(payload.orderNumber)}).</p>
+            <p style="margin:0 0 16px"><strong>Reason:</strong> ${this.escapeHtml(payload.reason)}</p>
+            <p style="margin:0 0 16px"><strong>Refund reference:</strong> <span style="font-family:monospace">${this.escapeHtml(payload.reference)}</span></p>
+            <p style="margin:0;color:#7A857F;font-size:12px">Card refunds usually appear within 5–10 business days depending on your bank. Tickets attached to this order have been cancelled and will not admit entry.</p>
+          </div>
+          <div style="padding:20px 32px;background:#FAFBF8;border-top:1px solid #ECEEE7;font-size:12px;color:#7A857F">
+            Questions? Reply to this email or contact support@ticketr.org.
+          </div>
+        </div>
+      </div>`;
+    if (this.isMock()) {
+      this.logger.log(`[MOCK EMAIL] Refund notification queued for ${payload.toEmail}`);
+      return { success: true, mock: true };
+    }
+    try {
+      const { error } = await this.resend.emails.send({
+        from: this.fromEmail,
+        to: payload.toEmail,
+        subject: `Refund processed — ${payload.eventName}`,
+        html,
+      });
+      if (error) throw new Error(error.message);
+      return { success: true };
+    } catch (error: any) {
+      this.logger.error(`Refund email failed for ${payload.toEmail}`, error);
+      return { success: false, error: error?.message };
     }
   }
 
@@ -431,8 +558,8 @@ export class ResendService {
         </html>
       `;
 
-      if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
-        this.logger.log(`[MOCK EMAIL SENT] Reset link sent to ${toEmail}: ${resetLink}`);
+      if (this.isMock()) {
+        this.logger.log(`[MOCK EMAIL] Password reset link generated for ${toEmail}`);
         return { success: true, mock: true };
       }
 
@@ -451,8 +578,8 @@ export class ResendService {
   }
 
   async sendEmail(toEmail: string, subject: string, htmlContent: string) {
-    if (this.configService.get<string>('RESEND_API_KEY')?.startsWith('re_mock')) {
-      this.logger.log(`[MOCK EMAIL SENT] Email sent to ${toEmail} with subject: ${subject}`);
+    if (this.isMock()) {
+      this.logger.log(`[MOCK EMAIL] Campaign email for ${toEmail} (${subject})`);
       return { success: true, mock: true };
     }
 

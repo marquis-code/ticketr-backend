@@ -3,7 +3,6 @@ import sharp from 'sharp';
 import PDFDocument from 'pdfkit';
 import * as QRCode from 'qrcode';
 import * as https from 'https';
-import * as http from 'http';
 
 @Injectable()
 export class TicketGeneratorService {
@@ -12,18 +11,85 @@ export class TicketGeneratorService {
   /**
    * Downloads an image from a URL and returns it as a Buffer.
    */
-  private async downloadImage(url: string): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const client = url.startsWith('https') ? https : http;
-      client.get(url, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
-          return this.downloadImage(res.headers.location!).then(resolve).catch(reject);
-        }
-        const chunks: Buffer[] = [];
-        res.on('data', (chunk) => chunks.push(chunk));
-        res.on('end', () => resolve(Buffer.concat(chunks)));
-        res.on('error', reject);
-      }).on('error', reject);
+  private readonly maxImageBytes = 15 * 1024 * 1024;
+  private readonly downloadTimeoutMs = 15000;
+
+  private isAllowedImageHost(hostname: string): boolean {
+    const host = hostname.toLowerCase();
+    const defaults = ['res.cloudinary.com', 'cloudinary.com', 'images.unsplash.com'];
+    const extra = (process.env.ALLOWED_TEMPLATE_HOSTS || '')
+      .split(',')
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean);
+    return [...defaults, ...extra].some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+  }
+
+  /**
+   * Downloads a ticket template with SSRF guards: HTTPS only, host allowlist,
+   * bounded redirects/time/size. Organizer-supplied URLs must never reach
+   * internal services or the cloud metadata endpoint.
+   */
+  private async downloadImage(url: string, redirects = 0): Promise<Buffer> {
+    if (redirects > 3) throw new Error('Template image redirected too many times');
+
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error('Invalid template image URL');
+    }
+    if (parsed.protocol !== 'https:') {
+      throw new Error('Template images must be served over HTTPS');
+    }
+    if (!this.isAllowedImageHost(parsed.hostname)) {
+      throw new Error(`Template image host is not allowed: ${parsed.hostname}`);
+    }
+
+    return new Promise<Buffer>((resolve, reject) => {
+      const request = https.get(
+        parsed,
+        {
+          timeout: this.downloadTimeoutMs,
+          headers: { 'User-Agent': 'TicketrTicketRenderer/1.0' },
+        },
+        (res) => {
+          const status = res.statusCode || 0;
+          if (status >= 300 && status < 400 && res.headers.location) {
+            res.resume();
+            return this.downloadImage(new URL(res.headers.location, parsed).toString(), redirects + 1)
+              .then(resolve)
+              .catch(reject);
+          }
+          if (status !== 200) {
+            res.resume();
+            return reject(new Error(`Template image returned HTTP ${status}`));
+          }
+          const contentType = String(res.headers['content-type'] || '');
+          if (!contentType.startsWith('image/')) {
+            res.resume();
+            return reject(new Error('Template URL did not return an image'));
+          }
+
+          const chunks: Buffer[] = [];
+          let received = 0;
+          res.on('data', (chunk: Buffer) => {
+            received += chunk.length;
+            if (received > this.maxImageBytes) {
+              request.destroy();
+              reject(new Error('Template image is too large'));
+              return;
+            }
+            chunks.push(chunk);
+          });
+          res.on('end', () => resolve(Buffer.concat(chunks)));
+          res.on('error', reject);
+        },
+      );
+      request.on('timeout', () => {
+        request.destroy();
+        reject(new Error('Template image download timed out'));
+      });
+      request.on('error', reject);
     });
   }
 

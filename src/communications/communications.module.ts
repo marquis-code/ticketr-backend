@@ -6,6 +6,8 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { TicketSchema } from '../schemas/ticket.schema';
 import { CommunicationSchema } from '../schemas/communication.schema';
+import { EventSchema } from '../schemas/event.schema';
+import { TenantSchema } from '../schemas/tenant.schema';
 
 @Module({
   imports: [
@@ -13,7 +15,9 @@ import { CommunicationSchema } from '../schemas/communication.schema';
     CloudinaryModule,
     MongooseModule.forFeature([
       { name: 'Ticket', schema: TicketSchema },
-      { name: 'Communication', schema: CommunicationSchema }
+      { name: 'Communication', schema: CommunicationSchema },
+      { name: 'Event', schema: EventSchema },
+      { name: 'Tenant', schema: TenantSchema },
     ]),
   ],
   controllers: [CommunicationsController],

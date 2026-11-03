@@ -32,6 +32,24 @@ export class Communication {
 
   @Prop({ type: String, enum: CommunicationStatus, default: CommunicationStatus.DRAFT, index: true })
   status: CommunicationStatus;
+
+  @Prop({ default: 0 })
+  recipientCount: number;
+
+  @Prop({ default: 0 })
+  successCount: number;
+
+  @Prop({ default: 0 })
+  failedCount: number;
+
+  @Prop()
+  sentAt?: Date;
+
+  @Prop()
+  lastAttemptAt?: Date;
+
+  @Prop()
+  lastError?: string;
 }
 
 export const CommunicationSchema = SchemaFactory.createForClass(Communication);

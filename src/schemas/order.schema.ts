@@ -10,11 +10,21 @@ export enum OrderStatus {
   PAID = 'PAID',
   FAILED = 'FAILED',
   CANCELLED = 'CANCELLED',
+  REFUNDED = 'REFUNDED',
 }
 
 export class OrderItem {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'TicketTier', required: true })
   tierId: string;
+
+  @Prop()
+  tierDescription?: string;
+
+  @Prop({ default: 0 })
+  markupAmount?: number;
+
+  @Prop({ default: 0 })
+  reservedUnits?: number;
 
   @Prop({ required: true })
   tierName: string;
@@ -88,6 +98,58 @@ export class Order {
   @Prop({ index: true })
   paystackReference?: string;
 
+  /** Bearer token for the secure ticket wallet. Only ever shared with the buyer. */
+  @Prop({ index: true, unique: true, sparse: true })
+  walletToken?: string;
+
+  @Prop({ type: String, default: 'PENDING', index: true })
+  fulfillmentStatus?: 'PENDING' | 'IN_PROGRESS' | 'DONE' | 'FAILED';
+
+  @Prop()
+  fulfillmentStartedAt?: Date;
+
+  @Prop()
+  fulfillmentCompletedAt?: Date;
+
+  @Prop({ index: true })
+  reservationExpiresAt?: Date;
+
+  @Prop({ type: String, enum: ['HELD', 'CONSUMED', 'RELEASED', 'NONE'], default: 'NONE', index: true })
+  reservationState?: 'HELD' | 'CONSUMED' | 'RELEASED' | 'NONE';
+
+  @Prop()
+  balancePaymentReference?: string;
+
+  @Prop()
+  cancelledAt?: Date;
+
+  @Prop()
+  cancellationReason?: string;
+
+  /** Idempotency claims for scheduled reminder emails. */
+  @Prop({ type: Object, default: {} })
+  reminders?: {
+    abandonedAt?: Date;
+    dayBeforeAt?: Date;
+    hoursBeforeAt?: Date;
+    balanceDueAt?: Date;
+  };
+
+  @Prop({ default: 0 })
+  platformFee?: number;
+
+  @Prop({ default: 0 })
+  netToOrganizer?: number;
+
+  @Prop({ default: 0 })
+  ticketsIssued?: number;
+
+  @Prop({ type: String, default: 'WEB' })
+  channel?: 'WEB' | 'INTERNAL' | 'RESALE' | 'API';
+
+  @Prop()
+  promoReservedAt?: Date;
+
   @Prop()
   paystackAccessCode?: string;
 
@@ -114,6 +176,30 @@ export class Order {
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
   updatedBy?: string;
+
+  @Prop({ index: true })
+  refundedAt?: Date;
+
+  @Prop({ default: 0 })
+  refundAmount?: number;
+
+  @Prop()
+  refundReason?: string;
+
+  @Prop()
+  refundReference?: string;
+
+  @Prop({ type: String, enum: ['PAYSTACK', 'MANUAL'], default: 'PAYSTACK' })
+  refundMethod?: 'PAYSTACK' | 'MANUAL';
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User' })
+  refundedBy?: string;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Payout', index: true })
+  payoutId?: string;
+
+  @Prop()
+  paidOutAt?: Date;
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);

@@ -56,6 +56,7 @@ export class PaystackService {
         'https://api.paystack.co/transaction/initialize',
         body,
         {
+          timeout: 20000,
           headers: {
             Authorization: `Bearer ${this.secretKey}`,
             'Content-Type': 'application/json',
@@ -88,6 +89,7 @@ export class PaystackService {
       const response = await axios.get(
         `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
         {
+          timeout: 20000,
           headers: {
             Authorization: `Bearer ${this.secretKey}`,
           },
@@ -102,20 +104,67 @@ export class PaystackService {
   }
 
   verifyWebhookSignature(rawBody: string | Buffer, signatureHeader: string): boolean {
-    if (!signatureHeader || this.secretKey.startsWith('sk_test_mock')) {
-      return true; // Bypass signature verification in dev/mock environment
-    }
-    const hash = crypto
-      .createHmac('sha512', this.secretKey)
-      .update(rawBody)
-      .digest('hex');
+    // SECURITY: an absent signature must never be treated as valid.
+    if (!signatureHeader) return false;
 
-    return hash === signatureHeader;
+    // Only bypass cryptography when running in mock mode outside production.
+    if (this.secretKey.startsWith('sk_test_mock')) {
+      return process.env.NODE_ENV !== 'production';
+    }
+
+    const hash = crypto.createHmac('sha512', this.secretKey).update(rawBody).digest('hex');
+    const provided = String(signatureHeader).trim().toLowerCase();
+
+    try {
+      return crypto.timingSafeEqual(Buffer.from(hash, 'utf8'), Buffer.from(provided, 'utf8'));
+    } catch {
+      return false;
+    }
+  }
+
+  /** Refund a captured transaction. Amount is in kobo; omit for a full refund. */
+  async refundTransaction(reference: string, amountKobo?: number) {
+    if (this.secretKey.startsWith('sk_test_mock')) {
+      this.logger.log(`[MOCK PAYSTACK REFUND] Reference: ${reference}, Amount: ${amountKobo || 'full'}`);
+      return {
+        status: true,
+        mock: true,
+        data: {
+          status: 'success',
+          transaction: reference,
+          amount: amountKobo || 0,
+          refund_reference: `MOCK-REFUND-${Date.now().toString(36)}`,
+        },
+      };
+    }
+
+    try {
+      const body: any = { transaction: reference };
+      if (amountKobo) body.amount = amountKobo;
+      const response = await axios.post('https://api.paystack.co/refund', body, {
+        timeout: 20000,
+        headers: {
+          Authorization: `Bearer ${this.secretKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      this.logger.error(
+        `Paystack refund failed for ${reference}`,
+        error?.response?.data || error?.message,
+      );
+      throw new BadRequestException(
+        'Paystack could not process this refund: ' +
+          (error?.response?.data?.message || error?.message || 'unknown error'),
+      );
+    }
   }
 
   async getBanks() {
     try {
       const response = await axios.get('https://api.paystack.co/bank?country=nigeria', {
+        timeout: 20000,
         headers: {
           Authorization: `Bearer ${this.secretKey}`,
         },
@@ -132,10 +181,11 @@ export class PaystackService {
       const response = await axios.get(
         `https://api.paystack.co/bank/resolve?account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`,
         {
+          timeout: 20000,
           headers: {
             Authorization: `Bearer ${this.secretKey}`,
           },
-        }
+        },
       );
       return response.data.data;
     } catch (error) {

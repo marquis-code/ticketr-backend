@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AnalyticsService } from './analytics.service';
 import { AuditService } from '../audit/audit.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -13,29 +14,36 @@ export class AnalyticsController {
     private auditService: AuditService
   ) {}
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('track-visit')
-  async trackVisit(@Body() body: { tenantId: string; page: string; details: any }, @Request() req) {
-    if (body.tenantId) {
-      let realTenantId = body.tenantId;
-      if (!body.tenantId.match(/^[0-9a-fA-F]{24}$/)) {
-        realTenantId = await this.analyticsService.resolveTenantIdFromSubdomain(body.tenantId) || body.tenantId;
-      }
-      
-      try {
-        await this.auditService.logAction({
-          action: 'PUBLIC_SUBDOMAIN_VISITED',
-          entity: 'Subdomain',
-          entityId: 'N/A',
-          userId: '000000000000000000000000', // Anonymous System ID
-          tenantId: realTenantId,
-          details: {
-            page: body.page,
-            userAgent: req.headers['user-agent'],
-            ...body.details
-          },
-          ipAddress: req.ip,
-        });
-      } catch (e) {}
+  async trackVisit(@Body() body: { tenantId?: string; page?: string; details?: any }, @Request() req) {
+    if (!body?.tenantId) return { success: true };
+
+    // Only resolve to a real, existing tenant. Never trust an arbitrary id.
+    let tenantId: string | null = null;
+    if (/^[0-9a-fA-F]{24}$/.test(body.tenantId)) {
+      tenantId = body.tenantId;
+    } else {
+      tenantId = await this.analyticsService.resolveTenantIdFromSubdomain(body.tenantId);
+    }
+    if (!tenantId) return { success: true };
+
+    try {
+      await this.auditService.logAction({
+        action: 'PUBLIC_PAGE_VISIT',
+        entity: 'Storefront',
+        entityId: 'N/A',
+        userId: undefined as any,
+        tenantId,
+        details: {
+          page: String(body.page || '/').slice(0, 200),
+          referrer: String(req.headers['referer'] || '').slice(0, 300),
+          userAgent: String(req.headers['user-agent'] || '').slice(0, 300),
+        },
+        ipAddress: req.ip,
+      });
+    } catch {
+      // Analytics must never break the storefront.
     }
     return { success: true };
   }

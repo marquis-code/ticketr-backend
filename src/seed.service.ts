@@ -77,14 +77,16 @@ export class SeedService implements OnModuleInit {
       // 3. Seed Event: Dinner & Awards Night
       let event = await this.eventModel.findOne({ tenantId: tenant._id.toString(), slug: 'dinner-and-awards-night' });
       if (!event) {
-        const eventDate = new Date('2026-09-06T19:00:00.000Z'); // Sunday, Sept. 6th, 2026
-        const endDate = new Date('2026-09-07T02:00:00.000Z');
+        // Seeded events must be in the future or the storefront has nothing to sell.
+        const eventDate = new Date(Date.now() + 45 * 24 * 60 * 60 * 1000);
+        eventDate.setHours(19, 0, 0, 0);
+        const endDate = new Date(eventDate.getTime() + 7 * 60 * 60 * 1000);
 
         event = await this.eventModel.create({
           tenantId: tenant._id.toString(),
           slug: 'dinner-and-awards-night',
           title: 'Dinner & Awards Night',
-          description: `THEME: LE GRAND SOIR: THE GRAND OVATION\n\nJoin us for an extravagant evening of glamour, recognition, and celebration.\n\n✨ Black Tie | Red Carpet | Awards | Live Entertainment\n\n📅 Date: Sunday, Sept. 6th, 2026\n⏰ Red Carpet: 7:00 PM | Main Event: 8:00 PM\n📍 Venue: Undisclosed (Lagos)`,
+          description: `THEME: LE GRAND SOIR: THE GRAND OVATION\n\nJoin us for an extravagant evening of glamour, recognition, and celebration.\n\n✨ Black Tie | Red Carpet | Awards | Live Entertainment\n\n📅 Date: ${eventDate.toDateString()}\n⏰ Red Carpet: 7:00 PM | Main Event: 8:00 PM\n📍 Venue: Undisclosed (Lagos)`,
           bannerUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
           startDate: eventDate,
           endDate: endDate,
@@ -125,7 +127,7 @@ export class SeedService implements OnModuleInit {
           eventId: event._id.toString(),
           name: 'VVIP (Table of 10)',
           price: 350000,
-          capacity: 20,
+          capacity: 200,
           soldCount: 0,
           maxPerPurchase: 2,
           isActive: true,

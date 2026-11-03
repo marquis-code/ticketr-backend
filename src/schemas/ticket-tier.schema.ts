@@ -24,6 +24,19 @@ export class TicketTier {
   @Prop({ default: 0, min: 0 })
   soldCount: number;
 
+  /**
+   * Units held by checkout sessions that have not been paid yet.
+   * capacity - soldCount - reservedCount is the honest "available now" number.
+   */
+  @Prop({ default: 0, min: 0 })
+  reservedCount: number;
+
+  @Prop()
+  salesStartAt?: Date;
+
+  @Prop()
+  salesEndAt?: Date;
+
   @Prop()
   templateImageUrl?: string;
 

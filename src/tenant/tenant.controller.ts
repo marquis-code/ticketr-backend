@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { TenantService } from './tenant.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -37,8 +37,11 @@ export class TenantController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ORGANIZER)
   @Patch(':id')
-  async updateTenant(@Param('id') id: string, @Body() body: any) {
-    return this.tenantService.updateTenant(id, body);
+  async updateTenant(@Request() req, @Param('id') id: string, @Body() body: any) {
+    return this.tenantService.updateTenant(id, body, {
+      role: req.user.role,
+      tenantId: req.user.tenantId,
+    });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
