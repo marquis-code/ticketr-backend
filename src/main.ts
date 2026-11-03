@@ -3,6 +3,15 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  // The bare apex currently has no web service; www is the live storefront.
+  // Normalise a stale env value so ticket emails never link to a dead host.
+  if (
+    process.env.FRONTEND_URL === 'https://ticketr.org' ||
+    process.env.FRONTEND_URL === 'http://ticketr.org'
+  ) {
+    process.env.FRONTEND_URL = 'https://www.ticketr.org';
+  }
+
   // rawBody is required so Paystack webhook signatures are verified against the
   // exact bytes Paystack signed, not a re-serialised JSON object.
   const app = await NestFactory.create(AppModule, {

@@ -430,7 +430,7 @@ export class ResendService {
     subject: string;
     message: string;
   }) {
-    const frontend = (process.env.FRONTEND_URL || 'https://ticketr.org').replace(/\/+$/, '');
+    const frontend = (process.env.FRONTEND_URL || 'https://www.ticketr.org').replace(/\/+$/, '');
     const html = `
       <div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:auto;background:#F6F5EF;padding:32px 16px;color:#0A1F1A">
         <div style="background:#fff;border:1px solid #E4E4DA;border-radius:20px;overflow:hidden">

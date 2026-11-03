@@ -307,9 +307,8 @@ export class TicketService {
       );
     }
 
-    const adminDomain =
-      tenant && tenant.slug ? `admin-${tenant.slug}.ticketr.org` : 'admin.ticketr.org';
-    const qrCodeUrl = `https://${adminDomain}/admin/verify/${ticket.qrCodeHash}`;
+    const adminBase = (process.env.ADMIN_URL || 'https://admin.ticketr.org').replace(/\/+$/, '');
+    const qrCodeUrl = `${adminBase}/admin/verify/${ticket.qrCodeHash}`;
 
     const ticketImageBuffer = await this.ticketGeneratorService.generateTicketImage({
       templateImageUrl: tier.templateImageUrl,
@@ -389,7 +388,7 @@ export class TicketService {
     const order = await this.orderModel.findById(ticket.orderId);
     const tenant = order ? await this.tenantModel.findById(order.tenantId) : null;
     const walletUrl = order
-      ? `${(process.env.FRONTEND_URL || 'https://ticketr.org').replace(/\/+$/, '')}/my-tickets?token=${order.walletToken}`
+      ? `${(process.env.FRONTEND_URL || 'https://www.ticketr.org').replace(/\/+$/, '')}/my-tickets?token=${order.walletToken}`
       : '';
 
     await this.sendTicketEmail(ticket, event, tenant, walletUrl);
@@ -445,9 +444,8 @@ export class TicketService {
   ) {
     if (!ticket.attendeeEmail) return;
     const tier = await this.ticketTierModel.findById(ticket.tierId);
-    const adminDomain =
-      tenant && tenant.slug ? `admin-${tenant.slug}.ticketr.org` : 'admin.ticketr.org';
-    const qrCodeUrl = `https://${adminDomain}/admin/verify/${ticket.qrCodeHash}`;
+    const adminBase = (process.env.ADMIN_URL || 'https://admin.ticketr.org').replace(/\/+$/, '');
+    const qrCodeUrl = `${adminBase}/admin/verify/${ticket.qrCodeHash}`;
     const qrCodeDelivery = (event as any).qrCodeDelivery || 'STAMP_ON_TICKET';
 
     let ticketImageBuffer: Buffer | undefined;
@@ -519,7 +517,7 @@ export class TicketService {
     const tenant = await this.tenantModel.findById(tenantId);
     const order = await this.orderModel.findById(ticket.orderId);
     const walletUrl = order
-      ? `${(process.env.FRONTEND_URL || 'https://ticketr.org').replace(/\/+$/, '')}/my-tickets?token=${order.walletToken}`
+      ? `${(process.env.FRONTEND_URL || 'https://www.ticketr.org').replace(/\/+$/, '')}/my-tickets?token=${order.walletToken}`
       : '';
 
     await this.sendTicketEmail(ticket, event, tenant, walletUrl);
@@ -678,7 +676,7 @@ export class TicketService {
 
     const tenant = await this.tenantModel.findById(tenantId);
     const walletUrl = order
-      ? `${(process.env.FRONTEND_URL || 'https://ticketr.org').replace(/\/+$/, '')}/my-tickets?token=${order.walletToken}`
+      ? `${(process.env.FRONTEND_URL || 'https://www.ticketr.org').replace(/\/+$/, '')}/my-tickets?token=${order.walletToken}`
       : '';
     await this.sendTicketEmail(ticket, event, tenant, walletUrl);
 
@@ -975,7 +973,7 @@ export class TicketService {
     ticket.emailSent = false;
     await ticket.save();
 
-    const frontend = (process.env.FRONTEND_URL || 'https://ticketr.org').replace(/\/+$/, '');
+    const frontend = (process.env.FRONTEND_URL || 'https://www.ticketr.org').replace(/\/+$/, '');
     const walletUrl = `${frontend}/my-tickets?token=${walletToken}`;
     await this.sendTicketEmail(ticket, event, tenant, walletUrl);
 

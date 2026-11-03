@@ -26,7 +26,7 @@ export class CronService {
   ) {}
 
   private checkoutUrl(tenant: TenantDocument | null, event: EventDocument | null) {
-    const frontend = (process.env.FRONTEND_URL || 'https://ticketr.org').replace(/\/+$/, '');
+    const frontend = (process.env.FRONTEND_URL || 'https://www.ticketr.org').replace(/\/+$/, '');
     if (!tenant || !event) return frontend;
     return `${frontend}/event/${event.slug}?tenant=${tenant.slug}`;
   }

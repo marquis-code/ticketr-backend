@@ -834,7 +834,7 @@ export class OrderService {
     const event = await this.eventModel.findById(order.eventId);
     if (!event) throw new NotFoundException('Event for this order no longer exists');
 
-    const frontend = (process.env.FRONTEND_URL || 'https://ticketr.org').replace(/\/+$/, '');
+    const frontend = (process.env.FRONTEND_URL || 'https://www.ticketr.org').replace(/\/+$/, '');
     const walletUrl = `${frontend}/my-tickets?token=${order.walletToken}`;
 
     const existingTickets = await this.ticketModel.find({ orderId: order._id.toString() }).exec();
@@ -985,9 +985,8 @@ export class OrderService {
     if (!ticket.attendeeEmail) return;
     try {
       const tier = await this.ticketTierModel.findById(ticket.tierId);
-      const adminDomain =
-        tenant && tenant.slug ? `admin-${tenant.slug}.ticketr.org` : 'admin.ticketr.org';
-      const qrCodeUrl = `https://${adminDomain}/admin/verify/${ticket.qrCodeHash}`;
+      const adminBase = (process.env.ADMIN_URL || 'https://admin.ticketr.org').replace(/\/+$/, '');
+      const qrCodeUrl = `${adminBase}/admin/verify/${ticket.qrCodeHash}`;
       const qrCodeDelivery = (event as any).qrCodeDelivery || 'STAMP_ON_TICKET';
 
       let ticketImageBuffer: Buffer | undefined;
@@ -1818,7 +1817,7 @@ export class OrderService {
     const event = await this.eventModel.findById(order.eventId);
     const tenant = await this.tenantModel.findById(order.tenantId);
     if (!event) throw new NotFoundException('Event not found');
-    const walletUrl = `${(process.env.FRONTEND_URL || 'https://ticketr.org').replace(/\/+$/, '')}/my-tickets?token=${order.walletToken}`;
+    const walletUrl = `${(process.env.FRONTEND_URL || 'https://www.ticketr.org').replace(/\/+$/, '')}/my-tickets?token=${order.walletToken}`;
 
     const tickets = await this.ticketModel.find({ orderId: order._id.toString() });
     for (const ticket of tickets) {
